@@ -149,14 +149,31 @@ flutter test           # track-fairness test
 
 ## Releasing
 
+**Test APKs (sideloading).** GitHub Actions builds two APKs on every push
+and publishes them on the `apk-latest` release:
+- `addis-surfers-arm64.apk`: smaller, works on almost all modern phones.
+- `addis-surfers.apk`: universal.
+
+Both are signed with `android/app/sideload.jks`. This is a fixed **test** key,
+committed on purpose so that every build has the same signature and installs
+as an update over the previous one. The build fails if that ever changes.
+Don't use this key for the Play Store.
+
 **Android (Google Play)**
-1. Create an upload keystore and add a `signingConfig` in
-   `android/app/build.gradle.kts`. It currently signs release builds with the
-   debug key.
-2. Change `applicationId` (`com.addissurfers.addis_surfers`) if you want a
+1. Create your private upload key (keep it safe and never commit it):
+   `keytool -genkey -v -keystore ~/addis-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload`
+2. Create `android/key.properties` (it is git-ignored):
+   ```
+   storeFile=/home/you/addis-upload.jks
+   storePassword=...
+   keyAlias=upload
+   keyPassword=...
+   ```
+   Release builds use it automatically when the file exists.
+3. Change `applicationId` (`com.addissurfers.addis_surfers`) if you want a
    different package name. You can't change it after you publish.
-3. `flutter build appbundle --release ...` (see above), then upload the `.aab`.
-4. In the Play Console, declare in the Data safety form that the app uses the
+4. `flutter build appbundle --release ...` (see above), then upload the `.aab`.
+5. In the Play Console, declare in the Data safety form that the app uses the
    advertising ID.
 
 **iOS (App Store)**

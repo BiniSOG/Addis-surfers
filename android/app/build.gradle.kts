@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -33,11 +35,38 @@ android {
                 ?: "ca-app-pub-3940256099942544~3347511713" // Google TEST id
     }
 
+    // Signing:
+    //  * Play Store: create android/key.properties (storeFile, storePassword,
+    //    keyAlias, keyPassword) pointing at your private upload key. It is
+    //    git-ignored and, when present, is used for release builds.
+    //  * Otherwise release builds use app/sideload.jks, a FIXED test key that
+    //    is committed on purpose so every test APK has the same signature and
+    //    installs as an update over the previous one. Never use it on Play.
+    val keyProps = Properties().apply {
+        val f = rootProject.file("key.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        create("sideload") {
+            storeFile = file("sideload.jks")
+            storePassword = "addis-sideload"
+            keyAlias = "addis-sideload"
+            keyPassword = "addis-sideload"
+        }
+        if (keyProps.getProperty("storeFile") != null) {
+            create("upload") {
+                storeFile = rootProject.file(keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("upload")
+                ?: signingConfigs.getByName("sideload")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

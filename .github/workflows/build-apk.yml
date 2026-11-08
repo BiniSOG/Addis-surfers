@@ -40,6 +40,23 @@ jobs:
       - name: Rename APK
         run: cp build/app/outputs/flutter-apk/app-release.apk addis-surfers.apk
 
+      # Smaller download for modern phones (64-bit ARM).
+      - name: Build arm64-only APK
+        run: |
+          flutter build apk --release --split-per-abi --target-platform android-arm64
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk addis-surfers-arm64.apk
+          ls -la addis-surfers*.apk
+
+      # Every test APK must carry the same signature, or phones refuse to
+      # install it over the previous version.
+      - name: Check signing key
+        run: |
+          APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
+          for f in addis-surfers.apk addis-surfers-arm64.apk; do
+            $APKSIGNER verify --print-certs "$f" | tee cert.txt
+            grep -qi "SHA-256 digest: fbbbe92591ab70bbc1e5f9db0762bff2be30822a7c45c9a8a314f41e53b95961" cert.txt || { echo "::error::$f is not signed with the fixed sideload key"; exit 1; }
+          done
+
       - uses: actions/upload-artifact@v4
         timeout-minutes: 10
         continue-on-error: true
@@ -57,6 +74,13 @@ jobs:
           target_commitish: ${{ github.sha }}
           body: |
             Latest Android build from `${{ github.ref_name }}` (${{ github.sha }}).
-            Download **addis-surfers.apk** below and open it on your Android phone
-            (allow "Install unknown apps" when asked). Uses Google test ads.
-          files: addis-surfers.apk
+            * **addis-surfers-arm64.apk** - smaller download, works on almost every
+              phone from the last 6+ years.
+            * **addis-surfers.apk** - universal, works on every Android 7+ device.
+
+            Open the file on your phone (allow "Install unknown apps" when asked).
+            All builds share one signing key, so new versions install as updates.
+            Uses Google test ads.
+          files: |
+            addis-surfers.apk
+            addis-surfers-arm64.apk

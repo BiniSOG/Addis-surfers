@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Fixed key for sideloaded test builds only (NOT the Play Store upload key).
+!app/sideload.jks
