@@ -240,6 +240,11 @@ class Track:
 
 def write_mp3(path: str, y: np.ndarray, bitrate: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Android's MediaPlayer fails to open extremely short MP3s ("error (1,
+    # MIN_INT)"), so pad every effect to at least 0.3 s with silence.
+    min_len = int(0.3 * SR)
+    if len(y) < min_len:
+        y = np.concatenate([y, np.zeros(min_len - len(y))])
     pcm = (np.clip(y, -1, 1) * 32767).astype(np.int16)
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         wav_path = tmp.name

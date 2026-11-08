@@ -123,22 +123,29 @@ class AudioManager with WidgetsBindingObserver {
         await p.setAudioContext(ctx);
         await p.setReleaseMode(ReleaseMode.loop);
       }
-      for (final s in Sfx.values) {
-        final many = s == Sfx.coin || s == Sfx.swipe || s == Sfx.jump || s == Sfx.spinTick ||
-            s == Sfx.flower;
-        _pools[s] = await FlameAudio.createPool(
-          _sfxFile(s),
-          minPlayers: 1,
-          maxPlayers: many ? 4 : 2,
-          audioContext: ctx,
-        );
-      }
       _ready = true;
       _settings.addListener(_applyVolume);
       WidgetsBinding.instance.addObserver(this);
+      // Start the music right away; effects load while it plays.
       final pending = _mode;
       _mode = null;
       if (pending != null) setMode(pending);
+      // Each effect loads on its own: one bad file must never silence the game.
+      for (final s in Sfx.values) {
+        final many = s == Sfx.coin || s == Sfx.swipe || s == Sfx.jump || s == Sfx.spinTick ||
+            s == Sfx.flower;
+        try {
+          _pools[s] = await FlameAudio.createPool(
+            _sfxFile(s),
+            minPlayers: 1,
+            maxPlayers: many ? 4 : 2,
+            audioContext: ctx,
+          );
+        } catch (e) {
+          debugPrint('AddisAudio: could not load ${s.name}: $e');
+        }
+      }
+      debugPrint('AddisAudio: ${_pools.length}/${Sfx.values.length} sound effects ready');
     } catch (e) {
       debugPrint('Audio init failed: $e');
     }
