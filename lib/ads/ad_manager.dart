@@ -16,6 +16,14 @@ class AdManager {
   bool _canRequestAds = false;
   bool get canRequestAds => _canRequestAds;
 
+  /// Serve non-personalised ads (used when consent could not be gathered).
+  bool _nonPersonalized = false;
+
+  /// The request every ad in the app uses.
+  AdRequest get request => AdRequest(nonPersonalizedAds: _nonPersonalized);
+
+  static void log(String m) => debugPrint('AddisAds: $m');
+
   /// Flips to true once the SDK is initialized and ads may be requested.
   final ValueNotifier<bool> sdkReady = ValueNotifier(false);
 
@@ -40,41 +48,76 @@ class AdManager {
     if (_initialized) return;
     _initialized = true;
 
+    var consentFailed = false;
     final consentDone = Completer<void>();
-    ConsentInformation.instance.requestConsentInfoUpdate(
-      ConsentRequestParameters(),
-      () async {
-        await ConsentForm.loadAndShowConsentFormIfRequired((FormError? e) {
-          if (e != null) debugPrint('Consent form error: ${e.message}');
+    try {
+      ConsentInformation.instance.requestConsentInfoUpdate(
+        ConsentRequestParameters(),
+        () async {
+          log('consent info updated: ${await ConsentInformation.instance.getConsentStatus()}');
+          await ConsentForm.loadAndShowConsentFormIfRequired((FormError? e) {
+            if (e != null) log('consent form error ${e.errorCode}: ${e.message}');
+            if (!consentDone.isCompleted) consentDone.complete();
+          });
+        },
+        (FormError e) {
+          // Typical with test ids or before a privacy message is published in
+          // AdMob ("Privacy & messaging").
+          log('consent info error ${e.errorCode}: ${e.message}');
+          consentFailed = true;
           if (!consentDone.isCompleted) consentDone.complete();
-        });
-      },
-      (FormError e) {
-        debugPrint('Consent info error: ${e.message}');
-        if (!consentDone.isCompleted) consentDone.complete();
-      },
-    );
+        },
+      );
+    } catch (e) {
+      log('consent request threw: $e');
+      consentFailed = true;
+      if (!consentDone.isCompleted) consentDone.complete();
+    }
 
     // Consent from a previous session may already allow ads; start early.
-    if (await ConsentInformation.instance.canRequestAds()) {
+    if (await _safeCanRequestAds()) {
       await _startSdk();
     }
+    var timedOut = false;
     await consentDone.future.timeout(
-      const Duration(seconds: 12),
-      onTimeout: () {},
+      const Duration(seconds: 10),
+      onTimeout: () => timedOut = true,
     );
-    if (await ConsentInformation.instance.canRequestAds()) {
+    if (await _safeCanRequestAds()) {
       await _startSdk();
+    } else if (consentFailed || timedOut) {
+      // Never leave the game without ads because the consent service could
+      // not be reached: fall back to non-personalised ads, which do not rely
+      // on personal data.
+      log('consent unavailable (failed=$consentFailed, timedOut=$timedOut): '
+          'serving non-personalised ads');
+      _nonPersonalized = true;
+      await _startSdk();
+    } else {
+      log('ads not allowed yet (waiting for the user\'s consent choice)');
     }
-    privacyOptionsRequired.value =
-        await ConsentInformation.instance.getPrivacyOptionsRequirementStatus() ==
-            PrivacyOptionsRequirementStatus.required;
+    try {
+      privacyOptionsRequired.value =
+          await ConsentInformation.instance.getPrivacyOptionsRequirementStatus() ==
+              PrivacyOptionsRequirementStatus.required;
+    } catch (_) {}
+  }
+
+  Future<bool> _safeCanRequestAds() async {
+    try {
+      return await ConsentInformation.instance.canRequestAds();
+    } catch (e) {
+      log('canRequestAds threw: $e');
+      return false;
+    }
   }
 
   Future<void> _startSdk() async {
     if (_canRequestAds) return;
     _canRequestAds = true;
-    await MobileAds.instance.initialize();
+    final status = await MobileAds.instance.initialize();
+    log('SDK started (non-personalised: $_nonPersonalized, adapters: '
+        '${status.adapterStatuses.map((k, v) => MapEntry(k, v.state.name))})');
     sdkReady.value = true;
     if (kDebugMode && !AdConfig.usingTestIds) {
       debugPrint('WARNING: real ad unit ids in a debug build. '
@@ -98,15 +141,16 @@ class AdManager {
     _loadingInterstitial = true;
     InterstitialAd.load(
       adUnitId: AdConfig.interstitial,
-      request: const AdRequest(),
+      request: request,
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _loadingInterstitial = false;
           _interstitial = ad;
+          log('interstitial loaded');
         },
         onAdFailedToLoad: (err) {
           _loadingInterstitial = false;
-          debugPrint('Interstitial failed: ${err.message}');
+          log('interstitial failed ${err.code}: ${err.message}');
           Future.delayed(const Duration(seconds: 30), _loadInterstitial);
         },
       ),
@@ -159,16 +203,17 @@ class AdManager {
     _loadingRewarded = true;
     RewardedAd.load(
       adUnitId: AdConfig.rewarded,
-      request: const AdRequest(),
+      request: request,
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
           _loadingRewarded = false;
           _rewarded = ad;
           rewardedReady.value = true;
+          log('rewarded loaded');
         },
         onAdFailedToLoad: (err) {
           _loadingRewarded = false;
-          debugPrint('Rewarded failed: ${err.message}');
+          log('rewarded failed ${err.code}: ${err.message}');
           Future.delayed(const Duration(seconds: 30), _loadRewarded);
         },
       ),

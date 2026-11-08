@@ -44,15 +44,20 @@ class _AdBannerState extends State<AdBanner> {
     final ad = BannerAd(
       adUnitId: AdConfig.banner,
       size: size,
-      request: const AdRequest(),
+      request: AdManager.instance.request,
       listener: BannerAdListener(
         onAdLoaded: (_) {
+          AdManager.log('banner loaded (${size.width}x${size.height})');
           if (mounted) setState(() => _loaded = true);
         },
         onAdFailedToLoad: (ad, err) {
-          debugPrint('Banner failed: ${err.message}');
+          AdManager.log('banner failed ${err.code}: ${err.message}');
           ad.dispose();
           if (mounted) setState(() => _ad = null);
+          // Try again a little later (no fill / flaky network).
+          Future.delayed(const Duration(seconds: 30), () {
+            if (mounted && _ad == null) _load();
+          });
         },
       ),
     );

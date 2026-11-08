@@ -57,6 +57,8 @@ jobs:
             echo "===== crash buffer ====="; adb logcat -d -b crash || true
             echo "===== app log ====="; grep -E "AndroidRuntime|flutter|MediaPlayer.*rror|AudioTrack.*rror" logcat.txt | tail -150 || true
             echo "===== audio ====="; grep "AddisAudio" logcat.txt || true
+            echo "===== ads ====="; grep "AddisAds" logcat.txt || echo "no ad log lines"
+            if ! grep -q "AddisAds: SDK started" logcat.txt; then echo "ADS SDK NEVER STARTED"; exit 1; fi
             if grep -E "Audio init failed|Music switch failed|SFX error|Vibration error|could not load" logcat.txt; then echo "AUDIO/HAPTICS ERRORS FOUND"; exit 1; fi
             if ! grep -q "AddisAudio: music started" logcat.txt; then echo "MUSIC NEVER STARTED"; exit 1; fi
             if adb shell pidof com.addissurfers.addis_surfers; then echo "APP IS RUNNING"; else echo "APP NOT RUNNING"; exit 1; fi
