@@ -338,6 +338,7 @@ class WorldRenderer {
       items.add((p.z, 8, p));
     }
     items.add((g.pz, 3, null));
+    if (g.goatVisible) items.add((g.pz - g.goatGap, 9, null));
 
     // Scenery is placed on fixed slots so it is stable as you run.
     const poleGap = 16.0;
@@ -378,6 +379,8 @@ class WorldRenderer {
           _drawShelter(c, z);
         case 8:
           _drawPickup(c, ref! as Pickup);
+        case 9:
+          _drawGoat(c);
       }
     }
   }
@@ -703,6 +706,29 @@ class WorldRenderer {
     final o = project(laneX(p.lane), p.y + bob, p.z);
     final r = 0.4 * s;
     if (r < 1) return;
+    if (p.kind == PickupKind.flower) {
+      // Adey abeba (Meskel daisy).
+      final stem = Paint()
+        ..color = _fogged(const Color(0xFF2E7D32), p.z)
+        ..strokeWidth = max(1.0, r * 0.18);
+      c.drawLine(o, o.translate(0, r * 1.6), stem);
+      final spin = g.time * 1.5 + p.z;
+      final petal = _fill(_fogged(const Color(0xFFFFD21F), p.z));
+      for (var k = 0; k < 10; k++) {
+        final a = spin + k * pi / 5;
+        c.drawOval(
+          Rect.fromCenter(
+            center: o + Offset(cos(a), sin(a)) * r * 0.62,
+            width: r * 0.62,
+            height: r * 0.62,
+          ),
+          petal,
+        );
+      }
+      c.drawCircle(o, r * 0.42, _fill(_fogged(const Color(0xFFB8860B), p.z)));
+      c.drawCircle(o.translate(-r * 0.1, -r * 0.1), r * 0.15, _fill(_fogged(const Color(0xFFE0A030), p.z)));
+      return;
+    }
     if (p.kind == PickupKind.gem) {
       // Faceted blue gem.
       c.drawCircle(
@@ -835,6 +861,23 @@ class WorldRenderer {
         );
       }
     }
+    c.restore();
+  }
+
+  void _drawGoat(Canvas c) {
+    final z = g.pz - g.goatGap;
+    if (z < _zNear + 0.3) return;
+    final lane = (g.goatX / laneWidth).round().clamp(-1, 1);
+    final feet = project(g.goatX, g.surfaceAt(lane, z), z);
+    final s = scaleAt(z);
+    c.drawOval(
+      Rect.fromCenter(center: feet, width: 0.8 * s, height: 0.2 * s),
+      _fill(Colors.black.withValues(alpha: 0.25)),
+    );
+    c.save();
+    c.translate(feet.dx, feet.dy);
+    c.scale(s * 0.95 / 100);
+    CharacterPainter.paintGoat(c, g.time * 14);
     c.restore();
   }
 

@@ -514,6 +514,50 @@ def sfx_purchase():
     return z
 
 
+def sfx_bleat():
+    """Street goat: a buzzy, wobbly "meeeh"."""
+    n = int(0.55 * SR)
+    t = np.arange(n) / SR
+    f = 520 * (1 - 0.18 * t / t[-1]) * (1 + 0.06 * np.sin(2 * np.pi * 11 * t))
+    phase = 2 * np.pi * np.cumsum(f) / SR
+    y = np.zeros(n)
+    for k in range(1, 12):
+        y += np.sin(k * phase) / k
+    y = bandpass(y, 500, 2600) + 0.4 * bandpass(y, 2600, 3800)
+    env = np.minimum(1, t / 0.04) * np.minimum(1, (t[-1] - t) / 0.12)
+    return y * env
+
+
+def sfx_spin_tick():
+    n = int(0.04 * SR)
+    t = np.arange(n) / SR
+    return (np.sin(2 * np.pi * 2200 * t) * env_exp(n, 0.006)
+            + bandpass(RNG.standard_normal(n), 2000, 6000) * env_exp(n, 0.004) * 0.5)
+
+
+def sfx_box_open():
+    y = np.zeros(int(1.0 * SR))
+    n = int(0.25 * SR)
+    whoosh = bandpass(RNG.standard_normal(n), 400, 3000) * np.hanning(n)
+    y[:n] += whoosh * 0.6
+    for i, d in enumerate([0, 2, 4, 5, 7, 9]):
+        k = krar(degree_hz(BATI_MAJOR, 72, d), 0.5, bright=0.9)
+        s = int((0.2 + i * 0.05) * SR)
+        e = min(len(y), s + len(k))
+        y[s:e] += k[: e - s] * 0.45
+    return y
+
+
+def sfx_flower():
+    a = krar(midi_to_hz(84), 0.25, bright=0.7)
+    b = krar(midi_to_hz(91), 0.35, bright=0.7)
+    y = np.zeros(int(0.4 * SR))
+    y[: len(a)] += a * 0.5
+    s = int(0.04 * SR)
+    y[s : s + len(b)] += b[: len(y) - s] * 0.6
+    return y
+
+
 def normalise(y, peak=0.85):
     y = np.asarray(y, dtype=float)
     return y / (np.max(np.abs(y)) + 1e-9) * peak
@@ -527,7 +571,8 @@ def main():
         "crash": sfx_crash, "powerup": sfx_powerup, "gem": sfx_gem, "letter": sfx_letter,
         "shield_break": sfx_shield_break, "mission": sfx_mission, "click": sfx_click,
         "tick": sfx_tick, "go": sfx_go, "jetpack": sfx_jetpack, "stumble": sfx_stumble,
-        "purchase": sfx_purchase,
+        "purchase": sfx_purchase, "bleat": sfx_bleat, "spin_tick": sfx_spin_tick,
+        "box_open": sfx_box_open, "flower": sfx_flower,
     }
     for name, fn in effects.items():
         write_mp3(os.path.join(ROOT, "sfx", f"{name}.mp3"), normalise(fn()), "96k")

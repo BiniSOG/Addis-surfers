@@ -17,12 +17,15 @@ import '../progress.dart';
 import '../settings.dart';
 import 'character_select.dart';
 import 'daily_reward_dialog.dart';
+import 'event_screen.dart';
+import 'lucky_spin.dart';
 import 'missions_screen.dart';
 import 'settings_screen.dart';
 import 'shop_screen.dart';
+import 'trophies_screen.dart';
 import 'widgets.dart';
 
-enum _Page { home, crew, shop, missions, settings }
+enum _Page { home, crew, shop, missions, settings, event, trophies }
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -153,6 +156,13 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       case GameEvent.shieldBreak:
         a.sfx(Sfx.shieldBreak);
         _showToast('SHIELD SAVED YOU!');
+      case GameEvent.flower:
+        a.sfx(Sfx.flower, volume: 0.5);
+      case GameEvent.chase:
+        a.sfx(Sfx.bleat, volume: 0.8);
+      case GameEvent.newBest:
+        a.sfx(Sfx.mission);
+        _showToast('NEW BEST SCORE!');
     }
     _checkLiveMissions();
   }
@@ -226,6 +236,9 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
         score: _game.finalScore,
         coinsCollected: _game.stats.coins,
         gemsCollected: _game.stats.gems,
+        jetpacks: _game.stats.jetpacks,
+        roofDistance: _game.stats.roofDistance,
+        flowers: _game.stats.flowers,
       );
       final mission = await p.commitMissionRun(_runValues(includeRun: true));
       if (mission.setCompleted) AudioManager.instance.sfx(Sfx.mission);
@@ -241,6 +254,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   void _startRun() {
     _applyConfig();
     _game.nextLetter = Progress.instance.nextDailyLetter;
+    _game.bestScore = Progress.instance.bestScore;
     _runRecorded = false;
     _newBest = false;
     _doubled = false;
@@ -370,11 +384,14 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
           onPlay: _startRun,
           onOpen: (p) => setState(() => _page = p),
           onDaily: () => showDailyRewardDialog(context),
+          onSpin: () => showLuckySpin(context),
         ),
       _Page.crew => CharacterSelect(onClose: home),
       _Page.shop => ShopScreen(onClose: home),
       _Page.missions => MissionsScreen(onClose: home),
       _Page.settings => SettingsScreen(onClose: home),
+      _Page.event => EventScreen(onClose: home),
+      _Page.trophies => TrophiesScreen(onClose: home),
     };
   }
 }
@@ -382,10 +399,16 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
 // ---------------------------------------------------------------- menu
 
 class _MenuOverlay extends StatelessWidget {
-  const _MenuOverlay({required this.onPlay, required this.onOpen, required this.onDaily});
+  const _MenuOverlay({
+    required this.onPlay,
+    required this.onOpen,
+    required this.onDaily,
+    required this.onSpin,
+  });
   final VoidCallback onPlay;
   final ValueChanged<_Page> onOpen;
   final VoidCallback onDaily;
+  final VoidCallback onSpin;
 
   @override
   Widget build(BuildContext context) {
@@ -476,21 +499,48 @@ class _MenuOverlay extends StatelessWidget {
                     Positioned(
                       right: 0,
                       top: 56,
-                      child: ValueListenableBuilder<bool>(
-                        valueListenable: AdManager.instance.rewardedReady,
-                        builder: (context, ready, _) => ready
-                            ? RoundIconButton(
-                                icon: Icons.ondemand_video_rounded,
-                                label: '+${AdConfig.rewardedCoinAmount}',
-                                color: const Color(0xFFF08A00),
-                                onPressed: () async {
-                                  if (await AdManager.instance.showRewarded()) {
-                                    await progress.addCoins(AdConfig.rewardedCoinAmount);
-                                    AudioManager.instance.sfx(Sfx.purchase);
-                                  }
-                                },
-                              )
-                            : const SizedBox.shrink(),
+                      child: Column(
+                        children: [
+                          RoundIconButton(
+                            icon: Icons.casino_rounded,
+                            label: 'Spin',
+                            badge: progress.freeSpinAvailable ? 'FREE' : null,
+                            color: const Color(0xFF8E24AA),
+                            onPressed: onSpin,
+                          ),
+                          RoundIconButton(
+                            icon: Icons.local_florist_rounded,
+                            label: 'Event',
+                            badge: progress.eventClaimable > 0 ? '${progress.eventClaimable}' : null,
+                            color: const Color(0xFFF9A825),
+                            onPressed: () => onOpen(_Page.event),
+                          ),
+                          RoundIconButton(
+                            icon: Icons.emoji_events_rounded,
+                            label: 'Trophies',
+                            badge: progress.achievementsClaimable > 0
+                                ? '${progress.achievementsClaimable}'
+                                : null,
+                            color: const Color(0xFF2E86DE),
+                            onPressed: () => onOpen(_Page.trophies),
+                          ),
+                          ValueListenableBuilder<bool>(
+                            valueListenable: AdManager.instance.rewardedReady,
+                            builder: (context, ready, _) => ready
+                                ? RoundIconButton(
+                                    icon: Icons.ondemand_video_rounded,
+                                    label: '+${AdConfig.rewardedCoinAmount}',
+                                    color: const Color(0xFFF08A00),
+                                    onPressed: () async {
+                                      if (await AdManager.instance.showRewarded()) {
+                                        await progress.addCoins(AdConfig.rewardedCoinAmount);
+                                        AudioManager.instance.sfx(Sfx.purchase);
+                                      }
+                                    },
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -653,7 +703,17 @@ class _Hud extends StatelessWidget {
                 const Spacer(),
                 ValueListenableBuilder<int>(
                   valueListenable: game.coinsN,
-                  builder: (context, c, _) => CoinBadge(amount: c),
+                  builder: (context, c, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      CoinBadge(amount: c),
+                      const SizedBox(height: 4),
+                      ValueListenableBuilder<int>(
+                        valueListenable: game.flowersN,
+                        builder: (context, f, _) => _FlowerCount(count: f),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Material(
@@ -763,6 +823,31 @@ class _Hud extends StatelessWidget {
               const Align(alignment: Alignment(0, 0.1), child: IgnorePointer(child: _Tutorial())),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FlowerCount extends StatelessWidget {
+  const _FlowerCount({required this.count});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.local_florist_rounded, color: Color(0xFFFFD21F), size: 16),
+          const SizedBox(width: 4),
+          Text('$count',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
+        ],
       ),
     );
   }
@@ -1066,6 +1151,7 @@ class _ContinueOverlayState extends State<_ContinueOverlay> with SingleTickerPro
     final ok = await AdManager.instance.showRewarded();
     if (!mounted) return;
     if (ok) {
+      await Progress.instance.addRevive();
       widget.game.continueRun(viaAd: true);
     } else {
       widget.game.endRun();
@@ -1077,6 +1163,7 @@ class _ContinueOverlayState extends State<_ContinueOverlay> with SingleTickerPro
     _timer.stop();
     if (await Progress.instance.spendGems(_gemCost)) {
       AudioManager.instance.sfx(Sfx.gem);
+      await Progress.instance.addRevive();
       widget.game.continueRun(viaAd: false);
     } else {
       widget.game.endRun();

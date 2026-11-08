@@ -31,6 +31,9 @@ enum GameEvent {
   shieldBreak,
   jetpack,
   headStart,
+  flower,
+  chase,
+  newBest,
 }
 
 /// Per-run statistics, used for missions and the results screen.
@@ -43,6 +46,8 @@ class RunStats {
   int gems = 0;
   int shieldsUsed = 0;
   int headStartsUsed = 0;
+  int jetpacks = 0;
+  int flowers = 0;
   double roofDistance = 0;
   final List<String> letters = [];
 }
@@ -80,6 +85,10 @@ class AddisGame extends FlameGame with KeyboardEvents {
   /// Next Daily Word letter to place on the track (null = word complete).
   String? nextLetter;
 
+  /// Best score before this run (for the mid-run "NEW BEST!" moment).
+  int bestScore = 0;
+  bool _announcedBest = false;
+
   bool haptics = true;
   bool lowGraphics = false;
 
@@ -93,6 +102,7 @@ class AddisGame extends FlameGame with KeyboardEvents {
   final ValueNotifier<GameState> state = ValueNotifier(GameState.menu);
   final ValueNotifier<int> scoreN = ValueNotifier(0);
   final ValueNotifier<int> coinsN = ValueNotifier(0);
+  final ValueNotifier<int> flowersN = ValueNotifier(0);
   final ValueNotifier<Map<PowerKind, double>> powersN = ValueNotifier(const {});
 
   // ---- Simulation -----------------------------------------------------------
@@ -128,6 +138,11 @@ class AddisGame extends FlameGame with KeyboardEvents {
   final Map<PowerKind, double> powers = {};
   final Map<PowerKind, double> powerMax = {};
   double _flyBoost = 1;
+
+  // The street goat that chases you after a stumble.
+  double chase = 0;
+  double goatX = 0;
+  double goatGap = 12;
 
   late WorldRenderer _renderer;
 
@@ -173,9 +188,14 @@ class AddisGame extends FlameGame with KeyboardEvents {
     powers.clear();
     powerMax.clear();
     _flyBoost = 1;
+    chase = 0;
+    goatGap = 12;
+    goatX = 0;
+    _announcedBest = false;
     powersN.value = const {};
     scoreN.value = 0;
     coinsN.value = 0;
+    flowersN.value = 0;
     _generate();
   }
 
@@ -204,7 +224,11 @@ class AddisGame extends FlameGame with KeyboardEvents {
   void startRun() {
     _resetWorld(seed: DateTime.now().millisecondsSinceEpoch);
     speed = 12;
+    // The goat chases you off the platform at the start of every run.
+    chase = 3.2;
+    goatGap = 1.5;
     state.value = GameState.playing;
+    _emit(GameEvent.chase);
   }
 
   void pause() {
@@ -230,6 +254,7 @@ class AddisGame extends FlameGame with KeyboardEvents {
   void continueRun({required bool viaAd}) {
     if (viaAd) continuedThisRun = true;
     revives++;
+    chase = 0;
     _clearAhead(45);
     invincible = 2.5;
     rollTimer = 0;
@@ -346,6 +371,7 @@ class AddisGame extends FlameGame with KeyboardEvents {
     dt = min(dt, 1 / 30);
     time += dt;
     shake = max(0, shake - dt * 3);
+    _updateGoat(dt);
     if (state.value != GameState.playing) {
       return;
     }
@@ -428,7 +454,33 @@ class AddisGame extends FlameGame with KeyboardEvents {
 
     final s = score.floor();
     if (s != scoreN.value) scoreN.value = s;
+    if (!_announcedBest && bestScore > 0 && s > bestScore) {
+      _announcedBest = true;
+      _emit(GameEvent.newBest);
+    }
   }
+
+  void _updateGoat(double dt) {
+    final st = state.value;
+    if (st == GameState.crashed || st == GameState.over) {
+      // The goat catches up with you.
+      if (chase > 0 || goatGap < 10) {
+        chase = max(chase, 0.1);
+        goatGap += (0.9 - goatGap) * min(1, dt * 6);
+      }
+    } else if (st == GameState.playing) {
+      if (flying) chase = 0;
+      chase = max(0, chase - dt);
+      final target = chase > 1 ? 1.6 : 1.6 + (1 - chase) * 10;
+      goatGap += (target - goatGap) * min(1, dt * 3);
+    } else if (st == GameState.menu) {
+      chase = 0;
+      goatGap = 12;
+    }
+    goatX += (px - 0.55 - goatX) * min(1, dt * 5);
+  }
+
+  bool get goatVisible => goatGap < 9.5 && state.value != GameState.menu;
 
   /// Height of the walkable surface at ([lane], [z]).
   double surfaceAt(int lane, double z) {
@@ -463,6 +515,11 @@ class AddisGame extends FlameGame with KeyboardEvents {
     targetLane = physLane;
     px = laneX(physLane) + (px > laneX(physLane) ? 0.45 : -0.45) * laneWidth;
     _emit(GameEvent.stumble);
+    if (!flying) {
+      chase = 4;
+      goatGap = min(goatGap, 3);
+      _emit(GameEvent.chase);
+    }
     if (time - _lastStumble < 4) {
       _crash();
     }
@@ -523,6 +580,7 @@ class AddisGame extends FlameGame with KeyboardEvents {
         _startPower(p.kind, powerDurations[p.kind] ?? 10);
         if (p.kind == PowerKind.jetpack) {
           _flyBoost = 1;
+          stats.jetpacks++;
           _gen.addSkyCoins(pz + 12, pz + speed * powers[p.kind]! - 10, coins);
           _emit(GameEvent.jetpack);
         } else {
@@ -541,6 +599,10 @@ class AddisGame extends FlameGame with KeyboardEvents {
         if (p.kind == PickupKind.gem) {
           stats.gems++;
           _emit(GameEvent.gem);
+        } else if (p.kind == PickupKind.flower) {
+          stats.flowers++;
+          flowersN.value = stats.flowers;
+          _emit(GameEvent.flower);
         } else if (p.letter != null) {
           stats.letters.add(p.letter!);
           _emit(GameEvent.letter, p.letter);

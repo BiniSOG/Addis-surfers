@@ -24,6 +24,10 @@ enum Sfx {
   jetpack,
   stumble,
   purchase,
+  bleat,
+  spinTick,
+  boxOpen,
+  flower,
 }
 
 /// Background music and sound effects. All audio is original and generated
@@ -39,6 +43,8 @@ class AudioManager {
 
   static String _sfxFile(Sfx s) => switch (s) {
         Sfx.shieldBreak => 'sfx/shield_break.mp3',
+        Sfx.spinTick => 'sfx/spin_tick.mp3',
+        Sfx.boxOpen => 'sfx/box_open.mp3',
         _ => 'sfx/${s.name}.mp3',
       };
 
@@ -60,7 +66,7 @@ class AudioManager {
       await AudioPlayer.global.setAudioContext(ctx);
       await FlameAudio.bgm.initialize(audioContext: ctx);
       for (final s in Sfx.values) {
-        final many = s == Sfx.coin || s == Sfx.swipe || s == Sfx.jump;
+        final many = s == Sfx.coin || s == Sfx.swipe || s == Sfx.jump || s == Sfx.spinTick || s == Sfx.flower;
         _pools[s] = await FlameAudio.createPool(
           _sfxFile(s),
           minPlayers: 1,

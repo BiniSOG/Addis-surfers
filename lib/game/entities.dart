@@ -64,7 +64,7 @@ const trackPowerKinds = [
   PowerKind.jetpack,
 ];
 
-enum PickupKind { gem, letter }
+enum PickupKind { gem, letter, flower }
 
 /// Rare collectibles: gems (premium currency) and Daily Word letters.
 class Pickup {

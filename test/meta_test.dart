@@ -1,7 +1,10 @@
 import 'package:addis_surfers/game/entities.dart';
+import 'package:addis_surfers/meta/achievements.dart';
 import 'package:addis_surfers/meta/daily.dart';
+import 'package:addis_surfers/meta/event.dart';
 import 'package:addis_surfers/meta/economy.dart';
 import 'package:addis_surfers/meta/missions.dart';
+import 'package:addis_surfers/meta/rewards.dart';
 import 'package:addis_surfers/progress.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -90,6 +93,75 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getDouble('set_music'), 0.2);
       expect(p.coins, 0);
+    });
+  });
+
+  group('Engagement', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('one free spin a day plus limited ad spins', () async {
+      final p = await Progress.load();
+      expect(p.freeSpinAvailable, isTrue);
+      expect(await p.spin(viaAd: false), isNotNull);
+      expect(p.freeSpinAvailable, isFalse);
+      expect(await p.spin(viaAd: false), isNull);
+      for (var i = 0; i < maxAdSpinsPerDay; i++) {
+        expect(await p.spin(viaAd: true), isNotNull);
+      }
+      expect(p.adSpinsLeft, 0);
+      expect(await p.spin(viaAd: true), isNull);
+    });
+
+    test('mesob baskets are bought, opened and counted', () async {
+      final p = await Progress.load();
+      expect(await p.buyMesob(), isFalse);
+      await p.addCoins(mesobPrice);
+      expect(await p.buyMesob(), isTrue);
+      expect(p.mesobs, 1);
+      expect(await p.openMesob(), isNotNull);
+      expect(p.mesobs, 0);
+      expect(p.stat(Stat.boxesOpened), 1);
+      expect(await p.openMesob(), isNull);
+    });
+
+    test('character prize unlocks someone new, then pays coins', () async {
+      final p = await Progress.load();
+      const prize = Prize(PrizeKind.character, 1);
+      await p.grantPrize(prize);
+      await p.grantPrize(prize);
+      expect(p.unlocked.length, 3);
+      final text = await p.grantPrize(prize);
+      expect(text, contains('3000'));
+      expect(p.coins, 3000);
+    });
+
+    test('event flowers unlock tiers that can be claimed once', () async {
+      final p = await Progress.load();
+      await p.recordRun(score: 10, coinsCollected: 0, gemsCollected: 0, flowers: 80);
+      expect(p.eventFlowers, 80);
+      expect(p.eventClaimable, 2);
+      expect(await p.claimEventTier(0), isNotNull);
+      expect(await p.claimEventTier(0), isNull);
+      expect(await p.claimEventTier(2), isNull);
+      expect(p.eventClaimable, 1);
+    });
+
+    test('achievements unlock from lifetime stats', () async {
+      final p = await Progress.load();
+      final first = achievements.firstWhere((a) => a.id == 'first_run');
+      expect(p.achievementDone(first), isFalse);
+      await p.recordRun(score: 6000, coinsCollected: 1200, gemsCollected: 0);
+      expect(p.achievementDone(first), isTrue);
+      expect(p.achievementsClaimable, 3); // first run, 1k coins, 5k score
+      expect(await p.claimAchievement(first), isNotNull);
+      expect(await p.claimAchievement(first), isNull);
+    });
+
+    test('event weeks start on Monday', () {
+      final mon = DateTime(2026, 11, 9);
+      final sun = DateTime(2026, 11, 8);
+      expect(weekNumber(mon), weekNumber(sun) + 1);
+      expect(weekNumber(DateTime(2026, 11, 15)), weekNumber(mon));
     });
   });
 }

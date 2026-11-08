@@ -33,9 +33,24 @@ run up ramps onto the train roofs, and collect birr coins and power-ups.
   (BUNNA, INJERA, MESKEL, MERKATO...) for 1500 coins + 2 gems.
 - **Daily rewards**: a 7-day streak calendar (coins, shields, head starts, gems).
 
+**Engagement features**
+- **Goat chaser**: a street goat with a bell chases you off the platform at the
+  start of every run and after you stumble. Stumble again while it's on your
+  heels and it catches you.
+- **Lucky Spin**: one free spin a day, plus 3 extra spins for watching an ad.
+  Prizes include coins, gems, boosts and Mesob Surprises.
+- **Mesob Surprise**: a mystery basket (750 coins, or from spins and events)
+  with coins, gems, boosts, or a rare new crew member.
+- **Weekly event "Meskel Daisies"**: pick yellow *adey abeba* flowers on the
+  track to unlock 7 reward tiers, up to a free character. Progress resets every
+  Monday.
+- **Trophies**: 15 achievements (runs, coins, scores, jetpacks, roof running,
+  words, flowers, crew, missions...), each with a reward to claim.
+- A **"NEW BEST SCORE!"** moment the instant you beat your record mid-run.
+
 **Marketplace (Shop)**
 - Upgrades: 5 levels for each power-up, so they last longer.
-- Boosts: shields and head starts.
+- Boosts: shields, head starts and Mesob Surprise baskets.
 - Bank: trade gems for coins, or watch a short video for free coins.
 - Crew: unlock and select characters.
 
@@ -151,6 +166,10 @@ lib/
     missions_screen.dart    missions + daily word
     settings_screen.dart    settings
     daily_reward_dialog.dart 7-day rewards
+    lucky_spin.dart         daily prize wheel
+    mesob_dialog.dart       mystery basket reveal
+    event_screen.dart       weekly Meskel Daisies event
+    trophies_screen.dart    achievements
     widgets.dart            logo, buttons, badges
 assets/images/              character portraits from the key art
 assets/fonts/               Noto Sans Ethiopic (SIL OFL 1.1)
@@ -161,7 +180,6 @@ tools/generate_audio.py     soundtrack synthesiser
 ## Ideas for the next updates
 
 - A "Remove ads" in-app purchase (`in_app_purchase`), and coin packs.
-- Daily missions and login rewards, which help retention.
 - Firebase Analytics + Crashlytics, and Remote Config so you can tune ad
   frequency without shipping an update.
 - More characters, outfits and boards to buy with coins.

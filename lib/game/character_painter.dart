@@ -414,6 +414,52 @@ class CharacterPainter {
     }
   }
 
+  // ------------------------------------------------------------------ goat
+
+  /// A street goat seen from behind (100 units tall, feet at the origin).
+  static void paintGoat(Canvas c, double phase) {
+    const white = Color(0xFFF3EFE6);
+    const brown = Color(0xFF8B5A2B);
+    final bob = -sin(phase).abs() * 3;
+    // Legs (hind legs in front, galloping).
+    for (final side in [-1.0, 1.0]) {
+      final lift = max(0.0, sin(phase + (side > 0 ? 0 : pi))) * 12;
+      final top = Offset(side * 13, -40 + bob);
+      final hoof = Offset(side * 14, -4 - lift);
+      c.drawLine(top, hoof, _line(_outline, 9));
+      c.drawLine(top, hoof, _line(white, 6));
+      c.drawRect(Rect.fromCenter(center: hoof.translate(0, 2), width: 8, height: 5), _fill(const Color(0xFF3A3A3A)));
+    }
+    // Body.
+    final body = Rect.fromCenter(center: Offset(0, -58 + bob), width: 60, height: 48);
+    c.drawOval(body.inflate(2), _fill(_outline));
+    c.drawOval(body, _fill(white));
+    c.save();
+    c.clipPath(Path()..addOval(body));
+    c.drawOval(Rect.fromCenter(center: Offset(14, -66 + bob), width: 34, height: 26), _fill(brown));
+    c.restore();
+    // Tail flicking up.
+    final tail = Path()
+      ..moveTo(-4, -80 + bob)
+      ..lineTo(4, -80 + bob)
+      ..lineTo(sin(phase * 2) * 4, -92 + bob)
+      ..close();
+    c.drawPath(tail, _fill(brown));
+    // Head peeking over the back, with ears, horns and a little bell.
+    final head = Offset(0, -90 + bob);
+    for (final side in [-1.0, 1.0]) {
+      c.drawOval(Rect.fromCenter(center: head.translate(side * 16, 2), width: 16, height: 7), _fill(white));
+      final horn = Path()
+        ..moveTo(head.dx + side * 5, head.dy - 8)
+        ..quadraticBezierTo(head.dx + side * 10, head.dy - 24, head.dx + side * 18, head.dy - 20);
+      c.drawPath(horn, _line(const Color(0xFF6D6D6D), 4));
+    }
+    c.drawCircle(head, 12, _fill(_outline));
+    c.drawCircle(head, 10.5, _fill(white));
+    c.drawLine(Offset(-10, -78 + bob), Offset(10, -78 + bob), _line(ethRed, 3));
+    c.drawCircle(Offset(0, -75 + bob), 3.2, _fill(ethYellow));
+  }
+
   // ------------------------------------------------------------------ roll
 
   static void _roll(Canvas c, CharacterId id, double t) {

@@ -6,7 +6,9 @@ import '../audio/audio_manager.dart';
 import '../game/entities.dart';
 import '../game/textures.dart';
 import '../meta/economy.dart';
+import '../meta/rewards.dart';
 import '../progress.dart';
+import 'mesob_dialog.dart';
 import 'widgets.dart';
 
 /// The marketplace: power-up upgrades, consumable boosts and currency.
@@ -107,6 +109,27 @@ class _ShopScreenState extends State<ShopScreen> {
 
   List<Widget> _boosts(Progress p) => [
         const _Hint('Boosts are used during a run from the buttons on the right.'),
+        _ItemTile(
+          icon: Icons.shopping_basket_rounded,
+          color: const Color(0xFFE57373),
+          title: 'Mesob Surprise',
+          subtitle: 'A woven basket full of surprises: coins, gems, boosts, '
+              'or even a new crew member!',
+          owned: p.mesobs,
+          price: mesobPrice,
+          canAfford: p.coins >= mesobPrice,
+          onBuy: () => _buy(p.buyMesob, 'Mesob Surprise'),
+        ),
+        if (p.mesobs > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: ChunkyButton(
+              label: 'OPEN A MESOB (${p.mesobs})',
+              icon: Icons.card_giftcard_rounded,
+              color: const Color(0xFFE57373),
+              onPressed: () => openMesobDialog(context),
+            ),
+          ),
         _ItemTile(
           icon: Icons.shield_rounded,
           color: const Color(0xFF00897B),

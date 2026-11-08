@@ -20,6 +20,7 @@ class TrackGenerator {
 
   /// Daily Word letter to place next (null when the word is complete).
   String? letter;
+  int? _trailLane;
   final List<double> _trainEnd = [-1e9, -1e9, -1e9];
   final List<double> _laneLast = [-1e9, -1e9, -1e9];
   final List<double> _coinLast = [-1e9, -1e9, -1e9];
@@ -51,6 +52,10 @@ class TrackGenerator {
         if (_placePickup(z, pickups, PickupKind.letter)) {
           _nextLetterZ = z + 650 + _rng.nextDouble() * 450;
         }
+      }
+      // Weekly event flowers: frequent, never on top of a coin trail.
+      if (pickups != null && _rng.nextDouble() < 0.45) {
+        _placePickup(z + 10, pickups, PickupKind.flower, avoidLane: _trailLane);
       }
       final rowTime = 1.55 - 0.6 * difficulty;
       _nextRowZ += max(16.0, speed * rowTime) + _rng.nextDouble() * 4;
@@ -97,6 +102,7 @@ class TrackGenerator {
       }
     }
     // Fill one free lane with a coin trail.
+    _trailLane = null;
     for (final l in _shuffledLanes()) {
       if (used.contains(l)) continue;
       if (_trainEnd[_idx(l)] > z - 4 || !_laneClear(l, z - 4, 2)) continue;
@@ -106,6 +112,7 @@ class TrackGenerator {
           coins.add(Coin(laneX(l), 0.6, z - 4 + i * 1.6));
         }
         _coinLast[_idx(l)] = z - 4 + n * 1.6;
+        _trailLane = l;
       }
       break;
     }
@@ -248,8 +255,9 @@ class TrackGenerator {
     }
   }
 
-  bool _placePickup(double z, List<Pickup> pickups, PickupKind kind) {
+  bool _placePickup(double z, List<Pickup> pickups, PickupKind kind, {int? avoidLane}) {
     for (final l in _shuffledLanes()) {
+      if (l == avoidLane) continue;
       final pz = z - 8;
       if (_trainEnd[_idx(l)] > pz - 2 || !_laneClear(l, pz, 1)) continue;
       pickups.add(Pickup(kind, l, 0.9, pz, letter: kind == PickupKind.letter ? letter : null));

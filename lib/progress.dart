@@ -1,11 +1,16 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'characters.dart';
 import 'game/entities.dart';
+import 'meta/achievements.dart';
 import 'meta/daily.dart';
+import 'meta/event.dart';
 import 'meta/economy.dart';
 import 'meta/missions.dart';
+import 'meta/rewards.dart';
 
 /// Result of applying a finished (or ongoing) run to the missions.
 class MissionUpdate {
@@ -76,14 +81,167 @@ class Progress extends ChangeNotifier {
     required int score,
     required int coinsCollected,
     required int gemsCollected,
+    int jetpacks = 0,
+    double roofDistance = 0,
+    int flowers = 0,
   }) async {
     final isBest = score > bestScore;
     if (isBest) await _setInt('best', score);
     await _setInt('runs', runsPlayed + 1);
     await _setInt('coins', coins + coinsCollected);
     await _setInt('gems', gems + gemsCollected);
+    await _setInt('tot_coins', _int('tot_coins') + coinsCollected);
+    await _setInt('tot_jetpacks', _int('tot_jetpacks') + jetpacks);
+    await _setInt('tot_roof', _int('tot_roof') + roofDistance.floor());
+    await _setInt('tot_flowers', _int('tot_flowers') + flowers);
+    if (flowers > 0) await _addEventFlowers(flowers);
     notifyListeners();
     return isBest;
+  }
+
+  Future<void> addRevive() => _setInt('tot_revives', _int('tot_revives') + 1);
+
+  // ------------------------------------------------------------- prizes
+
+  final Random _rng = Random();
+
+  /// Applies a prize and returns a human-readable description.
+  Future<String> grantPrize(Prize prize) async {
+    switch (prize.kind) {
+      case PrizeKind.coins:
+        await _setInt('coins', coins + prize.amount);
+      case PrizeKind.gems:
+        await _setInt('gems', gems + prize.amount);
+      case PrizeKind.shield:
+        await _setInt('inv_shield', shields + prize.amount);
+      case PrizeKind.headStart:
+        await _setInt('inv_headstart', headStarts + prize.amount);
+      case PrizeKind.mesob:
+        await _setInt('inv_mesob', mesobs + prize.amount);
+      case PrizeKind.character:
+        final locked = characters.where((c) => !unlocked.contains(c.id)).toList();
+        if (locked.isEmpty) {
+          await _setInt('coins', coins + 3000);
+          notifyListeners();
+          return '3000 coins (you already have the whole crew!)';
+        }
+        final c = locked[_rng.nextInt(locked.length)];
+        await _prefs.setStringList(
+          'unlocked',
+          [...unlocked.map((e) => e.name), c.id.name],
+        );
+        notifyListeners();
+        return '${c.name} joined your crew!';
+    }
+    notifyListeners();
+    return prize.label;
+  }
+
+  // ------------------------------------------------------- mesob surprise
+
+  int get mesobs => _int('inv_mesob');
+
+  Future<bool> buyMesob() async {
+    if (!await spendCoins(mesobPrice)) return false;
+    await _setInt('inv_mesob', mesobs + 1);
+    notifyListeners();
+    return true;
+  }
+
+  /// Opens one basket. Returns the prize index and its description.
+  Future<(int, String)?> openMesob() async {
+    if (mesobs <= 0) return null;
+    await _setInt('inv_mesob', mesobs - 1);
+    await _setInt('tot_boxes', _int('tot_boxes') + 1);
+    final i = pickWeighted(mesobPrizes, _rng);
+    final text = await grantPrize(mesobPrizes[i]);
+    return (i, text);
+  }
+
+  // ----------------------------------------------------------- lucky spin
+
+  bool get _spinToday => _prefs.getString('spin_date') == dateKey(DateTime.now());
+  bool get freeSpinAvailable => !_spinToday || !(_prefs.getBool('spin_free') ?? false);
+  int get adSpinsLeft => maxAdSpinsPerDay - (_spinToday ? _int('spin_ads') : 0);
+
+  /// Spends a spin and returns the winning segment (the prize is granted).
+  Future<(int, String)?> spin({required bool viaAd}) async {
+    if (!viaAd && !freeSpinAvailable) return null;
+    if (viaAd && adSpinsLeft <= 0) return null;
+    if (!_spinToday) {
+      await _prefs.setString('spin_date', dateKey(DateTime.now()));
+      await _prefs.setBool('spin_free', false);
+      await _setInt('spin_ads', 0);
+    }
+    if (viaAd) {
+      await _setInt('spin_ads', _int('spin_ads') + 1);
+    } else {
+      await _prefs.setBool('spin_free', true);
+    }
+    final i = pickWeighted(spinPrizes, _rng);
+    final text = await grantPrize(spinPrizes[i]);
+    return (i, text);
+  }
+
+  // --------------------------------------------------------- weekly event
+
+  int get eventFlowers =>
+      _int('ev_week', -1) == weekNumber(DateTime.now()) ? _int('ev_flowers') : 0;
+
+  Set<int> get eventClaimed => _int('ev_week', -1) == weekNumber(DateTime.now())
+      ? (_prefs.getStringList('ev_claimed') ?? const []).map(int.parse).toSet()
+      : <int>{};
+
+  int get eventClaimable => [
+        for (var i = 0; i < eventTiers.length; i++)
+          if (eventFlowers >= eventTiers[i].flowers && !eventClaimed.contains(i)) i,
+      ].length;
+
+  Future<void> _addEventFlowers(int n) async {
+    final week = weekNumber(DateTime.now());
+    if (_int('ev_week', -1) != week) {
+      await _setInt('ev_week', week);
+      await _setInt('ev_flowers', 0);
+      await _prefs.setStringList('ev_claimed', const []);
+    }
+    await _setInt('ev_flowers', _int('ev_flowers') + n);
+  }
+
+  Future<String?> claimEventTier(int i) async {
+    if (eventFlowers < eventTiers[i].flowers || eventClaimed.contains(i)) return null;
+    await _prefs.setStringList('ev_claimed', [...eventClaimed.map((e) => '$e'), '$i']);
+    return grantPrize(eventTiers[i].prize);
+  }
+
+  // ---------------------------------------------------------- achievements
+
+  int stat(Stat s) => switch (s) {
+        Stat.runs => runsPlayed,
+        Stat.coins => _int('tot_coins'),
+        Stat.bestScore => bestScore,
+        Stat.jetpacks => _int('tot_jetpacks'),
+        Stat.roofDistance => _int('tot_roof'),
+        Stat.wordsCompleted => _int('tot_words'),
+        Stat.flowers => _int('tot_flowers'),
+        Stat.charactersOwned => unlocked.length,
+        Stat.missionLevel => missionLevel,
+        Stat.boxesOpened => _int('tot_boxes'),
+        Stat.revives => _int('tot_revives'),
+      };
+
+  Set<String> get achievementsClaimed =>
+      (_prefs.getStringList('ach_claimed') ?? const []).toSet();
+
+  bool achievementDone(Achievement a) => stat(a.stat) >= a.target;
+
+  int get achievementsClaimable => achievements
+      .where((a) => achievementDone(a) && !achievementsClaimed.contains(a.id))
+      .length;
+
+  Future<String?> claimAchievement(Achievement a) async {
+    if (!achievementDone(a) || achievementsClaimed.contains(a.id)) return null;
+    await _prefs.setStringList('ach_claimed', [...achievementsClaimed, a.id]);
+    return grantPrize(a.reward);
   }
 
   // ------------------------------------------------------------ characters
@@ -282,6 +440,7 @@ class Progress extends ChangeNotifier {
     await _setInt('word_count', n);
     final done = n >= dailyWord.length;
     if (done) {
+      await _setInt('tot_words', _int('tot_words') + 1);
       await _setInt('coins', coins + dailyWordCoins);
       await _setInt('gems', gems + dailyWordGems);
     }
