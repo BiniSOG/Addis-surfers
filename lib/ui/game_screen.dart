@@ -17,6 +17,7 @@ import '../meta/missions.dart';
 import '../progress.dart';
 import '../settings.dart';
 import 'character_select.dart';
+import 'about_screen.dart';
 import 'daily_reward_dialog.dart';
 import 'event_screen.dart';
 import 'lucky_spin.dart';
@@ -26,7 +27,7 @@ import 'shop_screen.dart';
 import 'trophies_screen.dart';
 import 'widgets.dart';
 
-enum _Page { home, crew, shop, missions, settings, event, trophies }
+enum _Page { home, crew, shop, missions, settings, event, trophies, about }
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -440,7 +441,11 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       _Page.crew => CharacterSelect(onClose: home),
       _Page.shop => ShopScreen(onClose: home),
       _Page.missions => MissionsScreen(onClose: home),
-      _Page.settings => SettingsScreen(onClose: home),
+      _Page.settings => SettingsScreen(
+          onClose: home,
+          onAbout: () => setState(() => _page = _Page.about),
+        ),
+      _Page.about => AboutScreen(onClose: () => setState(() => _page = _Page.settings)),
       _Page.event => EventScreen(onClose: home),
       _Page.trophies => TrophiesScreen(onClose: home),
     };

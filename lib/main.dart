@@ -32,6 +32,7 @@ class AddisSurfersApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Addis Surfers',
+      // Developed by Binyam Bayu.
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF078930)),

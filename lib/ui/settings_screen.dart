@@ -6,11 +6,13 @@ import '../audio/haptics.dart';
 import '../game/textures.dart';
 import '../progress.dart';
 import '../settings.dart';
+import 'about_screen.dart';
 import 'widgets.dart';
 
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.onClose});
+  const SettingsScreen({super.key, required this.onClose, required this.onAbout});
   final VoidCallback onClose;
+  final VoidCallback onAbout;
 
   @override
   Widget build(BuildContext context) {
@@ -88,10 +90,16 @@ class SettingsScreen extends StatelessWidget {
               color: ethRed,
               onTap: () => _confirmReset(context),
             ),
-            const SizedBox(height: 24),
+            const _Header('About'),
+            _ActionTile(
+              icon: Icons.info_outline_rounded,
+              label: 'About Addis Surfers',
+              onTap: onAbout,
+            ),
+            const SizedBox(height: 16),
             const Center(
               child: Text(
-                'Addis Surfers 1.1\nOriginal music in Ethiopian qenet:\n"Tezeta" and "Merkato Run"',
+                'Addis Surfers $appVersion  ·  Developed by $appDeveloper',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white38, fontSize: 12),
               ),

@@ -1,5 +1,7 @@
 # Addis Surfers · አዲስ ሰርፈርስ
 
+_Developed by **Binyam Bayu**._
+
 An endless runner set on the rail lines of Addis Ababa, for **Android and iOS**,
 built with Flutter + [Flame](https://flame-engine.org/) and monetised with
 **Google AdMob**.
