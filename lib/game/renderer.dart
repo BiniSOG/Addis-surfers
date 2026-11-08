@@ -79,8 +79,12 @@ class WorldRenderer {
     }
     _drawSky(canvas);
     _drawGround(canvas);
+    // Overhead wires sit above the track; when flying above them they must
+    // be drawn underneath the runner.
+    final aboveWires = g.py > 4.3;
+    if (aboveWires) _drawWires(canvas);
     _drawWorldObjects(canvas);
-    _drawWires(canvas);
+    if (!aboveWires) _drawWires(canvas);
     canvas.restore();
   }
 
@@ -315,73 +319,150 @@ class WorldRenderer {
     return v - v.floorToDouble();
   }
 
+  /// Lane used for layering; scenery lives outside the track (lane 9).
+  static const _sceneryLane = 9;
+
+  int _laneOfX(double x) => (x / laneWidth).round().clamp(-1, 1);
+
+  /// Draws everything on the track in correct depth order.
+  ///
+  /// Trains and ramps are solid boxes that can overlap in depth with boxes in
+  /// neighbouring lanes, so a single sort cannot layer them correctly. The
+  /// track is cut into depth slices at every box start/end; slices are drawn
+  /// far to near, and inside a slice lanes are drawn from the one furthest
+  /// from the camera inwards (a box first, then whatever stands on or in front
+  /// of it in that lane).
   void _drawWorldObjects(Canvas c) {
-    final items = <(double, int, Object?)>[];
-    // 0 obstacle, 1 coin, 2 power-up, 3 player, 4 pole, 5 palm, 6 building, 7 shelter
+    // (z, kind, ref, lane)
+    final items = <(double, int, Object?, int)>[];
+    final boxes = <Obstacle>[];
+    // 0 obstacle, 1 coin, 2 power-up, 3 player, 4 pole, 5 palm, 6 building,
+    // 7 shelter, 8 pickup, 9 goat
     for (final o in g.obstacles) {
       if (o.end < _zNear || o.z > _zFar) continue;
-      final key = (o.kind == ObstacleKind.train || o.kind == ObstacleKind.ramp)
-          ? o.end
-          : o.z;
-      items.add((key, 0, o));
+      if (o.kind == ObstacleKind.train || o.kind == ObstacleKind.ramp) {
+        boxes.add(o);
+      } else {
+        items.add((o.z, 0, o, o.lane));
+      }
     }
     for (final coin in g.coins) {
       if (coin.collected || coin.z < _zNear || coin.z > g.pz + 90) continue;
-      items.add((coin.z, 1, coin));
+      items.add((coin.z, 1, coin, _laneOfX(coin.x)));
     }
     for (final p in g.powerUps) {
       if (p.collected || p.z < _zNear || p.z > g.pz + 90) continue;
-      items.add((p.z, 2, p));
+      items.add((p.z, 2, p, p.lane));
     }
     for (final p in g.pickups) {
       if (p.collected || p.z < _zNear || p.z > g.pz + 90) continue;
-      items.add((p.z, 8, p));
+      items.add((p.z, 8, p, p.lane));
     }
-    items.add((g.pz, 3, null));
-    if (g.goatVisible) items.add((g.pz - g.goatGap, 9, null));
+    items.add((g.pz, 3, null, _laneOfX(g.px)));
+    if (g.goatVisible) items.add((g.pz - g.goatGap, 9, null, _laneOfX(g.goatX)));
 
     // Scenery is placed on fixed slots so it is stable as you run.
     const poleGap = 16.0;
     for (var i = (_zNear / poleGap).ceil(); i * poleGap < _zFar; i++) {
-      items.add((i * poleGap, 4, i));
+      items.add((i * poleGap, 4, i, _sceneryLane));
     }
     const palmGap = 6.0;
     for (var i = (_zNear / palmGap).ceil(); i * palmGap < _zFar; i++) {
-      if (_hash(i, 1) > (g.lowGraphics ? 0.75 : 0.3)) items.add((i * palmGap, 5, i));
+      if (_hash(i, 1) > (g.lowGraphics ? 0.75 : 0.3)) items.add((i * palmGap, 5, i, _sceneryLane));
     }
     const bGap = 12.0;
     for (var i = ((_zNear - 10) / bGap).ceil(); i * bGap < _zFar; i++) {
-      items.add((i * bGap, 6, i));
+      items.add((i * bGap, 6, i, _sceneryLane));
     }
     const shelterGap = 90.0;
     for (var i = ((_zNear - 20) / shelterGap).ceil(); i * shelterGap < _zFar; i++) {
-      items.add((i * shelterGap + 30, 7, i));
+      items.add((i * shelterGap + 30, 7, i, _sceneryLane));
     }
 
+
+    // Slice boundaries (far to near).
+    final cuts = <double>{_zFar + 1};
+    for (final b in boxes) {
+      cuts
+        ..add(max(b.z, _zNear))
+        ..add(min(b.end, _zFar + 1));
+    }
+    // Poles stand right beside the outer lanes; give them their own slice
+    // boundary so trains cover their lower part correctly.
+    for (final it in items) {
+      if (it.$2 == 4 && boxes.any((b) => b.z < it.$1 && b.end > it.$1)) cuts.add(it.$1);
+    }
+    cuts.add(_zNear - 100);
+    final edges = cuts.toList()..sort((a, b) => b.compareTo(a));
+
     items.sort((a, b) => b.$1.compareTo(a.$1));
-    for (final (z, kind, ref) in items) {
-      switch (kind) {
-        case 0:
-          _drawObstacle(c, ref! as Obstacle);
-        case 1:
-          _drawCoin(c, ref! as Coin);
-        case 2:
-          _drawPowerUp(c, ref! as PowerUp);
-        case 3:
-          _drawPlayer(c);
-        case 4:
-          _drawPoles(c, z);
-        case 5:
-          _drawPalm(c, ref! as int, z);
-        case 6:
-          _drawBuildings(c, ref! as int, z);
-        case 7:
-          _drawShelter(c, z);
-        case 8:
-          _drawPickup(c, ref! as Pickup);
-        case 9:
-          _drawGoat(c);
+    var next = 0; // index into items (sorted far to near)
+    double lateral(int lane) =>
+        lane == _sceneryLane ? 1e9 : (laneX(lane) - g.camX).abs();
+
+    for (var e = 0; e + 1 < edges.length; e++) {
+      final hi = edges[e], lo = edges[e + 1];
+      if (hi <= lo) continue;
+      // Items in this slice: z in (lo, hi].
+      final slice = <(double, int, Object?, int)>[];
+      while (next < items.length && items[next].$1 > lo) {
+        slice.add(items[next]);
+        next++;
       }
+      final sliceBoxes = [
+        for (final b in boxes)
+          if (b.z < hi && b.end > lo) b,
+      ];
+      if (sliceBoxes.isEmpty) {
+        for (final it in slice) {
+          _drawItem(c, it);
+        }
+        continue;
+      }
+      final lanes = <int>{
+        for (final it in slice) it.$4,
+        for (final b in sliceBoxes) b.lane,
+      }.toList()
+        ..sort((a, b) => lateral(b).compareTo(lateral(a)));
+      for (final lane in lanes) {
+        for (final b in sliceBoxes) {
+          if (b.lane != lane) continue;
+          if (b.kind == ObstacleKind.train) {
+            _drawTrain(c, b, lo, hi);
+          } else {
+            _drawRamp(c, b, lo, hi);
+          }
+        }
+        for (final it in slice) {
+          if (it.$4 == lane) _drawItem(c, it);
+        }
+      }
+    }
+  }
+
+  void _drawItem(Canvas c, (double, int, Object?, int) it) {
+    final (z, kind, ref, _) = it;
+    switch (kind) {
+      case 0:
+        _drawObstacle(c, ref! as Obstacle);
+      case 1:
+        _drawCoin(c, ref! as Coin);
+      case 2:
+        _drawPowerUp(c, ref! as PowerUp);
+      case 3:
+        _drawPlayer(c);
+      case 4:
+        _drawPoles(c, z);
+      case 5:
+        _drawPalm(c, ref! as int, z);
+      case 6:
+        _drawBuildings(c, ref! as int, z);
+      case 7:
+        _drawShelter(c, z);
+      case 8:
+        _drawPickup(c, ref! as Pickup);
+      case 9:
+        _drawGoat(c);
     }
   }
 
@@ -390,9 +471,9 @@ class WorldRenderer {
   void _drawObstacle(Canvas c, Obstacle o) {
     switch (o.kind) {
       case ObstacleKind.train:
-        _drawTrain(c, o);
+        _drawTrain(c, o, o.z, o.end);
       case ObstacleKind.ramp:
-        _drawRamp(c, o);
+        _drawRamp(c, o, o.z, o.end);
       case ObstacleKind.lowBarrier:
         _drawBillboard(c, Textures.lowBarrier, laneX(o.lane), o.z, 1.4, 0.8);
       case ObstacleKind.highBarrier:
@@ -417,30 +498,33 @@ class WorldRenderer {
     }
   }
 
-  void _drawTrain(Canvas c, Obstacle o) {
-    final z0 = max(o.z, _zNear);
-    final z1 = o.end;
+  /// Draws the part of a train between depths [from] and [to] (the
+  /// renderer draws long trains in slices so that trains in neighbouring
+  /// lanes are layered correctly).
+  void _drawTrain(Canvas c, Obstacle o, double from, double to) {
+    final z0 = max(from, max(o.z, _zNear));
+    final z1 = min(to, o.end);
     if (z1 <= z0) return;
     final x0 = laneX(o.lane) - trainWidth / 2;
     final x1 = laneX(o.lane) + trainWidth / 2;
     const h = trainHeight;
-    final fogNear = _fog(z0);
 
     // Roof.
     if (camHeight + _camY > h) {
       _quad(c, project(x0, h, z0), project(x1, h, z0), project(x1, h, z1),
           project(x0, h, z1), _fill(_fogged(const Color(0xFFB9BCC2), z0)));
-      final inset = 0.12;
+      const inset = 0.12;
       _quad(c, project(x0 + inset, h + 0.01, z0), project(x1 - inset, h + 0.01, z0),
           project(x1 - inset, h + 0.01, z1), project(x0 + inset, h + 0.01, z1),
           _fill(_fogged(const Color(0xFFA2A6AD), z0)));
       // Roof units at each car.
       for (var k = 0; k * carLength < o.length; k++) {
-        final cz = o.z + k * carLength + carLength * 0.35;
-        if (cz < _zNear || cz + 2 > z1) continue;
-        _quad(c, project(x0 + 0.3, h + 0.02, cz), project(x1 - 0.3, h + 0.02, cz),
-            project(x1 - 0.3, h + 0.02, cz + 2.5), project(x0 + 0.3, h + 0.02, cz + 2.5),
-            _fill(_fogged(const Color(0xFF7F848C), cz)));
+        final u0 = max(o.z + k * carLength + carLength * 0.35, z0);
+        final u1 = min(o.z + k * carLength + carLength * 0.35 + 2.5, z1);
+        if (u1 <= u0) continue;
+        _quad(c, project(x0 + 0.3, h + 0.02, u0), project(x1 - 0.3, h + 0.02, u0),
+            project(x1 - 0.3, h + 0.02, u1), project(x0 + 0.3, h + 0.02, u1),
+            _fill(_fogged(const Color(0xFF7F848C), u0)));
       }
     }
 
@@ -453,43 +537,46 @@ class WorldRenderer {
       for (var k = 0; k * carLength < o.length - 0.01; k++) {
         final cz0 = o.z + k * carLength;
         final cz1 = cz0 + carLength;
-        if (cz1 <= _zNear || cz0 > _zFar) continue;
-        final a0 = max(cz0, _zNear);
-        final f0 = (a0 - cz0) / carLength; // fraction clipped at the near end
+        final a0 = max(cz0, z0);
+        final a1 = min(cz1, z1);
+        if (a1 - a0 < 0.01) continue;
+        final f0 = (a0 - cz0) / carLength;
+        final f1 = (a1 - cz0) / carLength;
         final Rect src;
         final List<Offset> dst;
         if (rightFace) {
-          // Screen left→right runs far→near, so texture u=0 is the far end.
-          src = Rect.fromLTRB(0, 0, tw * (1 - f0), th);
+          // Screen left->right runs far->near, so texture u=0 is the far end.
+          src = Rect.fromLTRB(tw * (1 - f1), 0, tw * (1 - f0), th);
           dst = [
-            project(sideX, h, cz1),
+            project(sideX, h, a1),
             project(sideX, h, a0),
             project(sideX, 0, a0),
-            project(sideX, 0, cz1),
+            project(sideX, 0, a1),
           ];
         } else {
-          src = Rect.fromLTRB(tw * f0, 0, tw, th);
+          src = Rect.fromLTRB(tw * f0, 0, tw * f1, th);
           dst = [
             project(sideX, h, a0),
-            project(sideX, h, cz1),
-            project(sideX, 0, cz1),
+            project(sideX, h, a1),
+            project(sideX, 0, a1),
             project(sideX, 0, a0),
           ];
         }
-        if (src.width < 1) continue;
+        if (src.width < 0.5) continue;
         c.save();
         c.transform(_rectToQuad(src, dst));
         c.drawImageRect(tex, src, src, _imgPaint);
         c.restore();
-        final fog = _fog((a0 + cz1) / 2);
+        final fog = _fog((a0 + a1) / 2);
         if (fog > 0.01) {
           _quad(c, dst[0], dst[1], dst[2], dst[3], _fill(_haze.withValues(alpha: fog)));
         }
       }
     }
 
-    // Front face.
-    if (o.z >= _zNear) {
+    // Front face, only with the slice that contains the train's nose.
+    if (o.z >= _zNear && z0 <= o.z + 0.001) {
+      final fogNear = _fog(o.z);
       final dst = Rect.fromPoints(project(x0, h, o.z), project(x1, 0, o.z));
       final img = Textures.trainFront;
       c.drawImageRect(
@@ -514,26 +601,23 @@ class WorldRenderer {
     }
   }
 
-  void _drawRamp(Canvas c, Obstacle o) {
+  void _drawRamp(Canvas c, Obstacle o, double from, double to) {
+    final z0 = max(from, max(o.z, _zNear));
+    final z1 = min(to, o.end);
+    if (z1 <= z0) return;
     final x0 = laneX(o.lane) - trainWidth / 2;
     final x1 = laneX(o.lane) + trainWidth / 2;
     const h = trainHeight;
-    var z0 = o.z;
-    var y0 = 0.0;
-    if (z0 < _zNear) {
-      if (o.end <= _zNear) return;
-      y0 = h * (_zNear - o.z) / o.length;
-      z0 = _zNear;
-    }
-    final z1 = o.end;
-    // Side triangle (visible side).
+    double y(double z) => h * ((z - o.z) / o.length).clamp(0.0, 1.0);
+    final y0 = y(z0), y1 = y(z1);
+    // Side (visible side).
     final double? sx = g.camX > x1 ? x1 : (g.camX < x0 ? x0 : null);
     if (sx != null) {
-      _quad(c, project(sx, y0, z0), project(sx, h, z1), project(sx, 0, z1), project(sx, 0, z0),
+      _quad(c, project(sx, y0, z0), project(sx, y1, z1), project(sx, 0, z1), project(sx, 0, z0),
           _fill(_fogged(const Color(0xFF4F555C), z0)));
     }
     // Sloped top.
-    _quad(c, project(x0, y0, z0), project(x1, y0, z0), project(x1, h, z1), project(x0, h, z1),
+    _quad(c, project(x0, y0, z0), project(x1, y0, z0), project(x1, y1, z1), project(x0, y1, z1),
         _fill(_fogged(const Color(0xFF9097A0), z0)));
     // Grip stripes.
     final stripe = Paint()
@@ -541,9 +625,8 @@ class WorldRenderer {
       ..strokeWidth = max(1.0, scaleAt(z0) * 0.05);
     for (var t = 0.1; t < 1.0; t += 0.18) {
       final z = o.z + o.length * t;
-      if (z < z0) continue;
-      final y = h * t;
-      c.drawLine(project(x0 + 0.08, y + 0.01, z), project(x1 - 0.08, y + 0.01, z), stripe);
+      if (z < z0 || z > z1) continue;
+      c.drawLine(project(x0 + 0.08, y(z) + 0.01, z), project(x1 - 0.08, y(z) + 0.01, z), stripe);
     }
   }
 
@@ -894,10 +977,14 @@ class WorldRenderer {
     for (final side in [-1.0, 1.0]) {
       final x = side * 2.85;
       c.drawLine(project(x, 0, z), project(x, 4.6, z), p);
-      final arm = Paint()
-        ..color = col
-        ..strokeWidth = max(1.0, 0.06 * s);
-      c.drawLine(project(x, 4.45, z), project(side * 0.2, 4.45, z), arm);
+      // Cross-arms right next to the camera turn into thick bars across the
+      // screen (especially when running on roofs), so skip those.
+      if (z - g.pz > 3) {
+        final arm = Paint()
+          ..color = col
+          ..strokeWidth = max(1.0, min(0.06 * s, 6));
+        c.drawLine(project(x, 4.45, z), project(side * 0.2, 4.45, z), arm);
+      }
     }
   }
 

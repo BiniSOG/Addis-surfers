@@ -385,7 +385,9 @@ class AddisGame extends FlameGame with KeyboardEvents {
     invincible = max(0, invincible - dt);
 
     for (final o in obstacles) {
-      if (o.speed > 0) o.z -= o.speed * dt;
+      // Oncoming trains stop once they are past the runner, so they never
+      // slide into objects behind the player that are still on screen.
+      if (o.speed > 0 && o.z > pz - 6) o.z -= o.speed * dt;
     }
 
     // Lateral movement.
@@ -610,10 +612,13 @@ class AddisGame extends FlameGame with KeyboardEvents {
     powers.updateAll((k, v) => v - dt);
     powers.removeWhere((k, v) => v <= 0);
     if (wasFlying && !flying) {
-      // Landing: brief invincibility so you never drop into a crash.
+      // Landing: brief invincibility, a clear stretch of track to land on,
+      // and no leftover coins hanging in the sky.
       _flyBoost = 1;
       invincible = max(invincible, 1.6);
       vy = 0;
+      _clearAhead(28);
+      coins.removeWhere((c) => c.y > 3.5 && !c.magnetized);
       _emit(GameEvent.land);
     }
     powersN.value = Map.unmodifiable(powers);

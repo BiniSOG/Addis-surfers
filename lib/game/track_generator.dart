@@ -251,6 +251,7 @@ class TrackGenerator {
       if (_trainEnd[_idx(l)] > pz - 2 || !_laneClear(l, pz, 1)) continue;
       final kind = trackPowerKinds[_rng.nextInt(trackPowerKinds.length)];
       powerUps.add(PowerUp(kind, l, 0.9, pz));
+      _coinLast[_idx(l)] = max(_coinLast[_idx(l)], pz);
       return;
     }
   }
@@ -261,6 +262,8 @@ class TrackGenerator {
       final pz = z - 8;
       if (_trainEnd[_idx(l)] > pz - 2 || !_laneClear(l, pz, 1)) continue;
       pickups.add(Pickup(kind, l, 0.9, pz, letter: kind == PickupKind.letter ? letter : null));
+      // Oncoming trains must never drive through a pickup.
+      _coinLast[_idx(l)] = max(_coinLast[_idx(l)], pz);
       return true;
     }
     return false;
