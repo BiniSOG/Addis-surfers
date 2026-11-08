@@ -46,11 +46,17 @@ jobs:
             adb install -r addis-surfers.apk
             adb logcat -c
             adb shell am start -W -n com.addissurfers.addis_surfers/.MainActivity
-            sleep 25
-            adb exec-out screencap -p > screenshot.png || true
+            sleep 20
+            adb exec-out screencap -p > menu.png || true
+            adb shell input keyevent KEYCODE_BACK
+            sleep 2
+            adb shell wm size
+            S=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1); W=${S%x*}; H=${S#*x}; echo "screen $W x $H"; adb shell input tap $((W/2)) $((H*84/100)); sleep 3; adb shell input swipe $((W/2)) $((H*70/100)) $((W/2)) $((H*45/100)) 120; sleep 1; adb shell input swipe $((W/2)) $((H*50/100)) $((W*80/100)) $((H*50/100)) 120; sleep 1; adb shell input swipe $((W/2)) $((H*45/100)) $((W/2)) $((H*70/100)) 120; sleep 6
+            adb exec-out screencap -p > run.png || true
             adb logcat -d > logcat.txt || true
             echo "===== crash buffer ====="; adb logcat -d -b crash || true
-            echo "===== app log ====="; grep -E "AndroidRuntime|flutter|addis" logcat.txt | tail -150 || true
+            echo "===== app log ====="; grep -E "AndroidRuntime|flutter|MediaPlayer.*rror|AudioTrack.*rror" logcat.txt | tail -150 || true
+            if grep -E "Audio init failed|Music switch failed|SFX error|Vibration error" logcat.txt; then echo "AUDIO/HAPTICS ERRORS FOUND"; exit 1; fi
             if adb shell pidof com.addissurfers.addis_surfers; then echo "APP IS RUNNING"; else echo "APP NOT RUNNING"; exit 1; fi
 
       - uses: actions/upload-artifact@v4
@@ -58,5 +64,6 @@ jobs:
         with:
           name: smoke-test-output
           path: |
-            screenshot.png
+            menu.png
+            run.png
             logcat.txt

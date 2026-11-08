@@ -7,6 +7,7 @@ import '../ads/ad_config.dart';
 import '../ads/ad_manager.dart';
 import '../ads/banner_ad.dart';
 import '../audio/audio_manager.dart';
+import '../audio/haptics.dart';
 import '../game/addis_game.dart';
 import '../game/entities.dart';
 import '../game/textures.dart';
@@ -67,9 +68,10 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     _applyConfig();
     _game.state.addListener(_onStateChanged);
     _game.scoreN.addListener(_checkLiveMissions);
+    _game.powersN.addListener(_updateMusicMode);
     p.addListener(_onProgress);
     GameSettings.instance.addListener(_applyConfig);
-    AudioManager.instance.play(Music.menu);
+    AudioManager.instance.setMode(MusicMode.menu);
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowDaily());
   }
 
@@ -78,6 +80,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _game.state.removeListener(_onStateChanged);
     _game.scoreN.removeListener(_checkLiveMissions);
+    _game.powersN.removeListener(_updateMusicMode);
     Progress.instance.removeListener(_onProgress);
     GameSettings.instance.removeListener(_applyConfig);
     _toastTimer?.cancel();
@@ -96,7 +99,6 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       ..character = p.selected
       ..powerDurations = p.powerDurations
       ..scoreMultiplier = p.scoreMultiplier
-      ..haptics = s.haptics
       ..lowGraphics = s.lowGraphics;
   }
 
@@ -123,48 +125,94 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
 
   void _onGameEvent(GameEvent e, Object? data) {
     final a = AudioManager.instance;
+    final h = Haptics.instance;
     switch (e) {
       case GameEvent.coin:
         a.sfx(Sfx.coin, volume: 0.55);
+        h.play(Haptic.coin);
       case GameEvent.jump:
-        a.sfx(Sfx.jump, volume: 0.7);
+        if (data == true) {
+          a.sfx(Sfx.superJump, volume: 0.8);
+          h.play(Haptic.superJump);
+        } else {
+          a.sfx(Sfx.jump, volume: 0.7);
+          h.play(Haptic.jump);
+        }
       case GameEvent.roll:
-        a.sfx(Sfx.roll, volume: 0.7);
+        a.sfx(Sfx.roll, volume: 0.75);
+        a.duck();
+        h.play(Haptic.roll);
       case GameEvent.laneChange:
         a.sfx(Sfx.swipe, volume: 0.45);
+        h.play(Haptic.laneChange);
       case GameEvent.stumble:
         a.sfx(Sfx.stumble);
+        h.play(Haptic.stumble);
       case GameEvent.crash:
         a.sfx(Sfx.crash);
+        h.play(Haptic.crash);
       case GameEvent.powerUp:
-        a.sfx(Sfx.powerup);
+        if (data == PowerKind.magnet) {
+          a.sfx(Sfx.magnet);
+          h.play(Haptic.magnetOn);
+        } else {
+          a.sfx(Sfx.powerup);
+          h.play(Haptic.powerUp);
+        }
         if (data is PowerKind) _showToast(powerName(data).toUpperCase());
       case GameEvent.jetpack:
-        a.sfx(Sfx.jetpack);
+        a.sfx(Sfx.fly);
+        a.sfx(Sfx.jetpack, volume: 0.6);
+        h.play(Haptic.flyOn);
         _showToast('JETPACK!');
       case GameEvent.headStart:
-        a.sfx(Sfx.jetpack);
+        a.sfx(Sfx.fly);
+        a.sfx(Sfx.jetpack, volume: 0.6);
+        h.play(Haptic.flyOn);
         _showToast('HEAD START!');
+      case GameEvent.land:
+        a.sfx(Sfx.land);
+        h.play(Haptic.land);
       case GameEvent.gem:
         a.sfx(Sfx.gem);
+        h.play(Haptic.gem);
         _showToast('+1 GEM');
       case GameEvent.letter:
         a.sfx(Sfx.letter);
+        h.play(Haptic.gem);
         _collectLetter(data as String);
       case GameEvent.shieldOn:
         a.sfx(Sfx.powerup);
+        h.play(Haptic.powerUp);
       case GameEvent.shieldBreak:
         a.sfx(Sfx.shieldBreak);
+        h.play(Haptic.shieldBreak);
         _showToast('SHIELD SAVED YOU!');
       case GameEvent.flower:
         a.sfx(Sfx.flower, volume: 0.5);
+        h.play(Haptic.coin);
       case GameEvent.chase:
         a.sfx(Sfx.bleat, volume: 0.8);
       case GameEvent.newBest:
         a.sfx(Sfx.mission);
+        h.play(Haptic.reward);
         _showToast('NEW BEST SCORE!');
     }
     _checkLiveMissions();
+  }
+
+  /// Picks the version of the soundtrack that matches what the runner is
+  /// doing: flying beats shoes beats magnet beats plain running.
+  MusicMode get _runMode {
+    final p = _game.powers;
+    if (_game.flying) return MusicMode.fly;
+    if ((p[PowerKind.sneakers] ?? 0) > 0) return MusicMode.shoes;
+    if ((p[PowerKind.magnet] ?? 0) > 0) return MusicMode.magnet;
+    return MusicMode.run;
+  }
+
+  void _updateMusicMode() {
+    if (_game.state.value == GameState.playing) AudioManager.instance.setMode(_runMode);
   }
 
   Future<void> _collectLetter(String letter) async {
@@ -173,6 +221,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     _game.setNextLetter(p.nextDailyLetter);
     if (done) {
       AudioManager.instance.sfx(Sfx.mission);
+      Haptics.instance.play(Haptic.reward);
       _showToast('${p.dailyWord} COMPLETE! +$dailyWordCoins');
     } else {
       _showToast('LETTER  $letter');
@@ -209,6 +258,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       if (!_toastedMissions.contains(i) && stored[i] < ms[i].target && live[i] >= ms[i].target) {
         _toastedMissions.add(i);
         AudioManager.instance.sfx(Sfx.mission);
+        Haptics.instance.play(Haptic.reward);
         _showToast('MISSION COMPLETE!\n${ms[i].description}');
       }
     }
@@ -219,15 +269,16 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     final audio = AudioManager.instance;
     switch (s) {
       case GameState.menu:
-        audio.play(Music.menu);
+        audio.setMode(MusicMode.menu);
       case GameState.playing:
-        audio.play(Music.run);
-        audio.resumeMusic();
+        // From the muffled menu mix the song "opens up" into the full track.
+        audio.setMode(_runMode);
       case GameState.paused:
-      case GameState.crashed:
         audio.pauseMusic();
+      case GameState.crashed:
+        audio.tapeStop();
       case GameState.over:
-        audio.play(Music.menu);
+        audio.setMode(MusicMode.menu);
     }
     if (s == GameState.over && !_runRecorded) {
       _runRecorded = true;

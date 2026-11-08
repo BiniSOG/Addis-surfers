@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../audio/audio_manager.dart';
+import '../audio/haptics.dart';
 import '../game/textures.dart';
 
 /// The "ADDIS SURFERS" logotype in Ethiopian flag colours.
@@ -34,7 +35,13 @@ class GameLogo extends StatelessWidget {
             shaderCallback: (r) => const LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [ethGreen, Color(0xFF3CCF5A), ethYellow, Color(0xFFFF8A00), ethRed],
+              colors: [
+                ethGreen,
+                Color(0xFF3CCF5A),
+                ethYellow,
+                Color(0xFFFF8A00),
+                ethRed,
+              ],
               stops: [0, 0.3, 0.5, 0.72, 1],
             ).createShader(r),
             child: Text(text, style: style.copyWith(color: Colors.white)),
@@ -86,8 +93,12 @@ class CoinBadge extends StatelessWidget {
             height: 20 * s,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: RadialGradient(colors: [Color(0xFFFFE27A), Color(0xFFF2A90F)]),
-              border: Border.fromBorderSide(BorderSide(color: Color(0xFFB7770B), width: 2)),
+              gradient: RadialGradient(
+                colors: [Color(0xFFFFE27A), Color(0xFFF2A90F)],
+              ),
+              border: Border.fromBorderSide(
+                BorderSide(color: Color(0xFFB7770B), width: 2),
+              ),
             ),
           ),
           SizedBox(width: 6 * s),
@@ -137,6 +148,7 @@ class ChunkyButton extends StatelessWidget {
             ? null
             : () {
                 AudioManager.instance.sfx(Sfx.click);
+                Haptics.instance.play(Haptic.click);
                 onPressed!();
               },
         child: Container(
@@ -144,7 +156,10 @@ class ChunkyButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border(
-              bottom: BorderSide(color: Colors.black.withValues(alpha: 0.3), width: 5),
+              bottom: BorderSide(
+                color: Colors.black.withValues(alpha: 0.3),
+                width: 5,
+              ),
             ),
           ),
           child: Row(
@@ -214,11 +229,19 @@ class GemBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.diamond_rounded, color: const Color(0xFF5EC8FF), size: 20 * s),
+          Icon(
+            Icons.diamond_rounded,
+            color: const Color(0xFF5EC8FF),
+            size: 20 * s,
+          ),
           SizedBox(width: 6 * s),
           Text(
             '$amount',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18 * s),
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 18 * s,
+            ),
           ),
         ],
       ),
@@ -255,12 +278,15 @@ class RoundIconButton extends StatelessWidget {
             children: [
               Material(
                 color: color.withValues(alpha: 0.85),
-                shape: const CircleBorder(side: BorderSide(color: Colors.white, width: 2.5)),
+                shape: const CircleBorder(
+                  side: BorderSide(color: Colors.white, width: 2.5),
+                ),
                 elevation: 4,
                 child: InkWell(
                   customBorder: const CircleBorder(),
                   onTap: () {
                     AudioManager.instance.sfx(Sfx.click);
+                    Haptics.instance.play(Haptic.click);
                     onPressed();
                   },
                   child: Padding(
@@ -274,7 +300,10 @@ class RoundIconButton extends StatelessWidget {
                   right: -4,
                   top: -4,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: ethRed,
                       borderRadius: BorderRadius.circular(10),
@@ -340,9 +369,14 @@ class MenuPage extends StatelessWidget {
                   IconButton(
                     onPressed: () {
                       AudioManager.instance.sfx(Sfx.click);
+                      Haptics.instance.play(Haptic.click);
                       onClose();
                     },
-                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 32),
+                    icon: const Icon(
+                      Icons.arrow_back_rounded,
+                      color: Colors.white,
+                      size: 32,
+                    ),
                   ),
                   Text(
                     title,

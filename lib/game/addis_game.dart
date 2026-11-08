@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show KeyDownEvent, KeyEvent, LogicalKeyboardKey;
 import 'package:flutter/widgets.dart';
 
 import '../characters.dart';
@@ -31,6 +31,7 @@ enum GameEvent {
   shieldBreak,
   jetpack,
   headStart,
+  land,
   flower,
   chase,
   newBest,
@@ -89,7 +90,6 @@ class AddisGame extends FlameGame with KeyboardEvents {
   int bestScore = 0;
   bool _announcedBest = false;
 
-  bool haptics = true;
   bool lowGraphics = false;
 
   /// Called for every gameplay event.
@@ -215,9 +215,6 @@ class AddisGame extends FlameGame with KeyboardEvents {
 
   void _emit(GameEvent e, [Object? data]) => onEvent?.call(e, data);
 
-  void _haptic(void Function() f) {
-    if (haptics) f();
-  }
 
   // ---- Run lifecycle ---------------------------------------------------------
 
@@ -330,7 +327,7 @@ class AddisGame extends FlameGame with KeyboardEvents {
           grounded = false;
           rollTimer = 0;
           stats.jumps++;
-          _emit(GameEvent.jump);
+          _emit(GameEvent.jump, (powers[PowerKind.sneakers] ?? 0) > 0);
         }
       case InputAction.roll:
         if (flying) return;
@@ -511,7 +508,6 @@ class AddisGame extends FlameGame with KeyboardEvents {
 
   void _stumble() {
     shake = 1;
-    _haptic(HapticFeedback.lightImpact);
     targetLane = physLane;
     px = laneX(physLane) + (px > laneX(physLane) ? 0.45 : -0.45) * laneWidth;
     _emit(GameEvent.stumble);
@@ -535,12 +531,10 @@ class AddisGame extends FlameGame with KeyboardEvents {
       _clearAhead(30);
       invincible = 1.5;
       shake = 0.8;
-      _haptic(HapticFeedback.mediumImpact);
       _emit(GameEvent.shieldBreak);
       return false;
     }
     shake = 1.5;
-    _haptic(HapticFeedback.heavyImpact);
     state.value = GameState.crashed;
     _emit(GameEvent.crash);
     onCrash?.call();
@@ -586,7 +580,6 @@ class AddisGame extends FlameGame with KeyboardEvents {
         } else {
           _emit(GameEvent.powerUp, p.kind);
         }
-        _haptic(HapticFeedback.selectionClick);
       }
     }
 
@@ -607,7 +600,6 @@ class AddisGame extends FlameGame with KeyboardEvents {
           stats.letters.add(p.letter!);
           _emit(GameEvent.letter, p.letter);
         }
-        _haptic(HapticFeedback.selectionClick);
       }
     }
   }
@@ -622,6 +614,7 @@ class AddisGame extends FlameGame with KeyboardEvents {
       _flyBoost = 1;
       invincible = max(invincible, 1.6);
       vy = 0;
+      _emit(GameEvent.land);
     }
     powersN.value = Map.unmodifiable(powers);
   }

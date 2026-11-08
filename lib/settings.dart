@@ -17,6 +17,12 @@ class GameSettings extends ChangeNotifier {
   double get musicVolume => _prefs.getDouble('set_music') ?? 0.6;
   double get sfxVolume => _prefs.getDouble('set_sfx') ?? 0.9;
   bool get haptics => _prefs.getBool('set_haptics') ?? true;
+  double get vibrationStrength => _prefs.getDouble('set_vib') ?? 0.8;
+
+  Future<void> setVibrationStrength(double v) async {
+    await _prefs.setDouble('set_vib', v.clamp(0.1, 1.0));
+    notifyListeners();
+  }
   bool get lowGraphics => _prefs.getBool('set_lowgfx') ?? false;
   bool get swipeHints => _prefs.getBool('set_hints') ?? true;
 

@@ -34,6 +34,11 @@ TEZETA_MINOR = [0, 2, 3, 7, 8]
 TEZETA_MAJOR = [0, 2, 4, 7, 9]
 BATI_MAJOR = [0, 4, 5, 7, 11]
 
+# The main soundtrack (tools/source/addis_groove_source.mp3) is in G major at
+# ~126 bpm, so gameplay sounds are tuned to G to sit inside the music.
+TRACK_ROOT = 67  # G4
+G_MAJOR_PENTA = [0, 2, 4, 7, 9]
+
 
 def midi_to_hz(m: float) -> float:
     return 440.0 * 2 ** ((m - 69) / 12)
@@ -387,23 +392,81 @@ def sfx_coin():
     return y
 
 
+def _pluck_run(degrees, root, spacing, length=0.35, bright=0.85, gain=0.55, scale=None):
+    scale = scale or G_MAJOR_PENTA
+    total = int((spacing * len(degrees) + length) * SR)
+    y = np.zeros(total)
+    for i, d in enumerate(degrees):
+        k = krar(degree_hz(scale, root, d), length, bright=bright)
+        s0 = int(i * spacing * SR)
+        e = min(total, s0 + len(k))
+        y[s0:e] += k[: e - s0] * gain
+    return y
+
+
 def sfx_jump():
-    n = int(0.22 * SR)
-    t = np.arange(n) / SR
-    f = 280 + 600 * (t / t[-1]) ** 0.7
-    y = np.sin(2 * np.pi * np.cumsum(f) / SR) * env_exp(n, 0.09) * 0.6
+    """Quick upward G-major flick plus a little air."""
+    y = _pluck_run([0, 2, 4], TRACK_ROOT, 0.035, length=0.25)
+    n = len(y)
     y += bandpass(RNG.standard_normal(n), 1500, 6000) * env_exp(n, 0.05) * 0.25
     return y
 
 
+def sfx_super_jump():
+    """Super-jump shoes: a springy two-octave sweep with a bassy boing."""
+    y = _pluck_run([0, 1, 2, 3, 4, 5, 6, 7], TRACK_ROOT - 12, 0.03, length=0.3, gain=0.5)
+    n = len(y)
+    t = np.arange(n) / SR
+    f = 70 + 160 * (1 - np.exp(-t / 0.08))
+    y += np.sin(2 * np.pi * np.cumsum(f) / SR) * env_exp(n, 0.18) * 0.7
+    return y
+
+
 def sfx_roll():
-    n = int(0.3 * SR)
+    """Downward G-major tumble over a whoosh."""
+    n = int(0.32 * SR)
     noise = RNG.standard_normal(n)
-    y = np.zeros(n)
+    w = np.zeros(n)
     for i in range(6):
         seg = slice(i * n // 6, (i + 1) * n // 6)
-        y[seg] = bandpass(noise[seg], 300 + 1800 * (1 - i / 6), 900 + 2500 * (1 - i / 6))
-    return y * np.hanning(n) * 0.8
+        w[seg] = bandpass(noise[seg], 300 + 1800 * (1 - i / 6), 900 + 2500 * (1 - i / 6))
+    y = w * np.hanning(n) * 0.6
+    p = _pluck_run([4, 2, 0], TRACK_ROOT - 12, 0.05, length=0.2, bright=0.6, gain=0.45)
+    y[: len(p)] += p[:n]
+    return y
+
+
+def sfx_land():
+    """Landing after flying: a soft kebero thump on G."""
+    d = kebero_dum()
+    n = int(0.4 * SR)
+    y = d[:n] * 0.9
+    k = krar(midi_to_hz(TRACK_ROOT - 24), 0.4, bright=0.4)
+    y[: len(k)] += k[:n] * 0.4
+    return y
+
+
+def sfx_magnet():
+    """Magnet on: shimmering, tremolo'd G-major arpeggio."""
+    y = _pluck_run([5, 7, 9, 7, 9, 12], TRACK_ROOT, 0.045, length=0.4, bright=1.0, gain=0.4)
+    t = np.arange(len(y)) / SR
+    return y * (0.7 + 0.3 * np.sin(2 * np.pi * 18 * t))
+
+
+def sfx_fly():
+    """Jetpack takeoff: a rising whoosh that blooms into a G major chord."""
+    n = int(1.2 * SR)
+    t = np.arange(n) / SR
+    noise = RNG.standard_normal(n)
+    whoosh = np.zeros(n)
+    for i in range(10):
+        seg = slice(i * n // 10, (i + 1) * n // 10)
+        whoosh[seg] = bandpass(noise[seg], 200 + 250 * i, 600 + 600 * i)
+    y = whoosh * np.minimum(1, t / 0.4) * env_exp(n, 0.6) * 0.6
+    chord = _pluck_run([0, 2, 4, 5], TRACK_ROOT, 0.02, length=0.8, gain=0.35)
+    s0 = int(0.35 * SR)
+    y[s0 : s0 + len(chord)] += chord[: n - s0]
+    return y
 
 
 def sfx_swipe():
@@ -426,7 +489,7 @@ def sfx_crash():
 def sfx_powerup():
     y = np.zeros(int(0.7 * SR))
     for i, d in enumerate([0, 1, 2, 3, 4, 5]):
-        k = krar(degree_hz(TEZETA_MAJOR, 72, d), 0.4, bright=0.85)
+        k = krar(degree_hz(G_MAJOR_PENTA, TRACK_ROOT, d), 0.4, bright=0.85)
         s = int(i * 0.06 * SR)
         e = min(len(y), s + len(k))
         y[s:e] += k[: e - s] * 0.6
@@ -564,15 +627,21 @@ def normalise(y, peak=0.85):
 
 
 def main():
-    write_mp3(os.path.join(ROOT, "music", "merkato_run.mp3"), merkato_run(), "112k")
-    write_mp3(os.path.join(ROOT, "music", "tezeta.mp3"), tezeta(), "112k")
+    import sys
+
+    # The in-game soundtrack now comes from tools/process_music.py. The two
+    # original qenet themes can still be rendered with --themes.
+    if "--themes" in sys.argv:
+        write_mp3(os.path.join(ROOT, "music", "merkato_run.mp3"), merkato_run(), "112k")
+        write_mp3(os.path.join(ROOT, "music", "tezeta.mp3"), tezeta(), "112k")
     effects = {
         "coin": sfx_coin, "jump": sfx_jump, "roll": sfx_roll, "swipe": sfx_swipe,
         "crash": sfx_crash, "powerup": sfx_powerup, "gem": sfx_gem, "letter": sfx_letter,
         "shield_break": sfx_shield_break, "mission": sfx_mission, "click": sfx_click,
         "tick": sfx_tick, "go": sfx_go, "jetpack": sfx_jetpack, "stumble": sfx_stumble,
         "purchase": sfx_purchase, "bleat": sfx_bleat, "spin_tick": sfx_spin_tick,
-        "box_open": sfx_box_open, "flower": sfx_flower,
+        "box_open": sfx_box_open, "flower": sfx_flower, "super_jump": sfx_super_jump,
+        "land": sfx_land, "magnet": sfx_magnet, "fly": sfx_fly,
     }
     for name, fn in effects.items():
         write_mp3(os.path.join(ROOT, "sfx", f"{name}.mp3"), normalise(fn()), "96k")

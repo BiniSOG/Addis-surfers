@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../ads/ad_manager.dart';
 import '../audio/audio_manager.dart';
+import '../audio/haptics.dart';
 import '../game/textures.dart';
 import '../progress.dart';
 import '../settings.dart';
@@ -41,8 +42,19 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.vibration_rounded,
               label: 'Vibration',
               value: s.haptics,
-              onChanged: s.setHaptics,
+              onChanged: (v) async {
+                await s.setHaptics(v);
+                if (v) Haptics.instance.play(Haptic.powerUp);
+              },
             ),
+            if (s.haptics)
+              _SliderTile(
+                icon: Icons.graphic_eq_rounded,
+                label: 'Vibration strength',
+                value: s.vibrationStrength,
+                onChanged: s.setVibrationStrength,
+                onChangeEnd: (_) => Haptics.instance.play(Haptic.land),
+              ),
             _SwitchTile(
               icon: Icons.battery_saver_rounded,
               label: 'Battery saver graphics',

@@ -55,19 +55,43 @@ run up ramps onto the train roofs, and collect birr coins and power-ups.
 - Crew: unlock and select characters.
 
 **Settings**
-- Music and sound effect volume, vibration, battery-saver graphics,
+- Music and sound effect volume, vibration on/off and strength, battery-saver graphics,
   show the tutorial again, ad privacy choices, reset progress.
 
-**Ethiopian soundtrack**
-- "Tezeta" (menu) uses the Tezeta minor *qenet*: slow krar arpeggios and a
-  washint flute melody.
-- "Merkato Run" (gameplay) uses the Ambassel *qenet*: a 6/8 eskista groove on
-  kebero drums, a krar ostinato and masenqo (fiddle) and washint melodies, with
-  hand claps.
-- All music and sound effects are original and synthesised by
-  `tools/generate_audio.py`, so you own them outright. To regenerate them:
-  `pip install numpy scipy`, then `python3 tools/generate_audio.py` (needs
-  ffmpeg).
+**Adaptive soundtrack**
+- The background music is your track (`tools/source/addis_groove_source.mp3`,
+  ~126 bpm, G major), cut into a seamless loop on a bar line.
+- The music reacts to what you do. Every version shares one timeline, and the
+  game crossfades between them in time with the beat:
+  - **Menu**: muffled, like music from the next room. It opens up into the full
+    track when you start running.
+  - **Magnet**: a shimmering phaser sweep.
+  - **Super-jump shoes**: heavy, punchy bass.
+  - **Jetpack / Head Start**: airy and echoing, "up in the clouds".
+  - **Roll**: the music dips briefly as you tumble.
+  - **Crash**: the song grinds to a halt like a turntable losing power ("tape
+    stop"), then the results screen carries on with the muffled mix.
+- Jump, super-jump, roll, magnet, takeoff and landing sounds are tuned to G
+  major so they sit inside the song.
+- To use a different song: replace the source file and run
+  `pip install numpy librosa`, then `python3 tools/process_music.py`.
+  `tools/generate_audio.py` makes the sound effects (and, with `--themes`, the
+  original Tezeta / Merkato Run qenet themes).
+
+**Vibration**
+- Each action has its own pattern, with strength control where the phone
+  supports it (Android 8+, iPhone 8+ through Core Haptics):
+  - a light tick for coins and lane changes
+  - a crisp tap for a jump
+  - a squash-and-release spring for a super jump
+  - two soft bumps for a roll
+  - rising "zzzing" pulses for the magnet
+  - a building engine rumble at jetpack takeoff
+  - a heavy thump on landing
+  - a hard double hit for a crash
+  - celebration pulses for rewards
+- Settings has a vibration toggle and a **strength** slider. Older phones fall
+  back to the system's standard haptic clicks.
 
 ## Ad strategy (AdMob)
 
@@ -146,7 +170,8 @@ lib/
   characters.dart           Meaza / Tadesse / Yoseph data & prices
   progress.dart             saved coins, best score, unlocks
   settings.dart             player settings (volume, vibration, graphics)
-  audio/audio_manager.dart  music + sound effects
+  audio/audio_manager.dart  adaptive music + sound effects
+  audio/haptics.dart        vibration patterns
   meta/                     economy, missions, daily rewards & daily word
   ads/
     ad_config.dart          ad unit ids + placement rules
@@ -174,7 +199,8 @@ lib/
 assets/images/              character portraits from the key art
 assets/fonts/               Noto Sans Ethiopic (SIL OFL 1.1)
 assets/audio/               generated music & sound effects
-tools/generate_audio.py     soundtrack synthesiser
+tools/process_music.py      turns the source song into the adaptive music
+tools/generate_audio.py     sound effect synthesiser
 ```
 
 ## Ideas for the next updates

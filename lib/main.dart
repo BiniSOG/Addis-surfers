@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'ads/ad_manager.dart';
 import 'audio/audio_manager.dart';
+import 'audio/haptics.dart';
 import 'progress.dart';
 import 'settings.dart';
 import 'ui/game_screen.dart';
@@ -15,6 +16,7 @@ Future<void> main() async {
   await GameSettings.load();
   // Audio loads in the background; music starts as soon as it is ready.
   AudioManager.instance.init();
+  Haptics.instance.init();
   // Silence the soundtrack while full-screen ads play.
   AdManager.instance.onFullScreenChange = (showing) =>
       showing ? AudioManager.instance.pauseMusic() : AudioManager.instance.resumeMusic();
