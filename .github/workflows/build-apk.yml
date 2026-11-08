@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter test
+
+      # Builds a universal release APK. Uses Google TEST ad ids unless real
+      # ids are passed with --dart-define (see README).
+      - run: flutter build apk --release
+
+      - name: Rename APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk addis-surfers.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: addis-surfers-apk
+          path: addis-surfers.apk
+
+      - name: Publish to the "apk-latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: Addis Surfers - latest APK
+          prerelease: true
+          make_latest: false
+          target_commitish: ${{ github.sha }}
+          body: |
+            Latest Android build from `${{ github.ref_name }}` (${{ github.sha }}).
+            Download **addis-surfers.apk** below and open it on your Android phone
+            (allow "Install unknown apps" when asked). Uses Google test ads.
+          files: addis-surfers.apk
