@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../audio/audio_manager.dart';
 import '../game/textures.dart';
 
 /// The "ADDIS SURFERS" logotype in Ethiopian flag colours.
@@ -132,7 +133,12 @@ class ChunkyButton extends StatelessWidget {
       shadowColor: Colors.black,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: onPressed,
+        onTap: onPressed == null
+            ? null
+            : () {
+                AudioManager.instance.sfx(Sfx.click);
+                onPressed!();
+              },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           decoration: BoxDecoration(
@@ -187,6 +193,174 @@ class Panel extends StatelessWidget {
         boxShadow: const [BoxShadow(blurRadius: 20, color: Colors.black45)],
       ),
       child: child,
+    );
+  }
+}
+
+class GemBadge extends StatelessWidget {
+  const GemBadge({super.key, required this.amount, this.big = false});
+  final int amount;
+  final bool big;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = big ? 1.3 : 1.0;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.diamond_rounded, color: const Color(0xFF5EC8FF), size: 20 * s),
+          SizedBox(width: 6 * s),
+          Text(
+            '$amount',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18 * s),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Round icon button with an optional badge (e.g. a "claim" dot).
+class RoundIconButton extends StatelessWidget {
+  const RoundIconButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.label,
+    this.badge,
+    this.color = const Color(0xFF14213D),
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String? label;
+  final String? badge;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Material(
+                color: color.withValues(alpha: 0.85),
+                shape: const CircleBorder(side: BorderSide(color: Colors.white, width: 2.5)),
+                elevation: 4,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () {
+                    AudioManager.instance.sfx(Sfx.click);
+                    onPressed();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(11),
+                    child: Icon(icon, color: Colors.white, size: 26),
+                  ),
+                ),
+              ),
+              if (badge != null)
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: ethRed,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: Text(
+                      badge!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (label != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                label!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Full-screen page used by Shop, Missions, Settings and Crew.
+class MenuPage extends StatelessWidget {
+  const MenuPage({
+    super.key,
+    required this.title,
+    required this.onClose,
+    required this.child,
+    this.trailing,
+  });
+
+  final String title;
+  final VoidCallback onClose;
+  final Widget child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xF20B132B),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 16, 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      AudioManager.instance.sfx(Sfx.click);
+                      onClose();
+                    },
+                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 32),
+                  ),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const Spacer(),
+                  ?trailing,
+                ],
+              ),
+            ),
+            Expanded(child: child),
+          ],
+        ),
+      ),
     );
   }
 }

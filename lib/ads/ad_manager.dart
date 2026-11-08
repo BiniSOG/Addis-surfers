@@ -28,6 +28,9 @@ class AdManager {
   bool _loadingRewarded = false;
   final ValueNotifier<bool> rewardedReady = ValueNotifier(false);
 
+  /// Called with true when a full-screen ad opens and false when it closes.
+  void Function(bool showing)? onFullScreenChange;
+
   int _runsSinceInterstitial = 0;
   DateTime _lastFullScreenAd = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastRewarded = DateTime.fromMillisecondsSinceEpoch(0);
@@ -131,16 +134,19 @@ class AdManager {
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _loadInterstitial();
+        onFullScreenChange?.call(false);
         done.complete();
       },
       onAdFailedToShowFullScreenContent: (ad, err) {
         ad.dispose();
         _loadInterstitial();
+        onFullScreenChange?.call(false);
         done.complete();
       },
     );
     _runsSinceInterstitial = 0;
     _lastFullScreenAd = now;
+    onFullScreenChange?.call(true);
     await ad.show();
     return done.future;
   }
@@ -186,14 +192,17 @@ class AdManager {
         _lastRewarded = DateTime.now();
         _lastFullScreenAd = _lastRewarded;
         _loadRewarded();
+        onFullScreenChange?.call(false);
         done.complete(earned);
       },
       onAdFailedToShowFullScreenContent: (ad, err) {
         ad.dispose();
         _loadRewarded();
+        onFullScreenChange?.call(false);
         done.complete(false);
       },
     );
+    onFullScreenChange?.call(true);
     await ad.show(onUserEarnedReward: (_, _) => earned = true);
     return done.future;
   }

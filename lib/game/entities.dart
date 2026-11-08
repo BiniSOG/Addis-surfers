@@ -46,7 +46,39 @@ class Coin {
   bool magnetized = false;
 }
 
-enum PowerKind { magnet, multiplier, sneakers }
+enum PowerKind {
+  magnet,
+  multiplier,
+  sneakers,
+  jetpack,
+
+  /// Bought in the shop and activated during a run; never spawns on track.
+  shield,
+}
+
+/// Power-ups that can appear on the track.
+const trackPowerKinds = [
+  PowerKind.magnet,
+  PowerKind.multiplier,
+  PowerKind.sneakers,
+  PowerKind.jetpack,
+];
+
+enum PickupKind { gem, letter }
+
+/// Rare collectibles: gems (premium currency) and Daily Word letters.
+class Pickup {
+  Pickup(this.kind, this.lane, this.y, this.z, {this.letter});
+  final PickupKind kind;
+  final int lane;
+  final double y;
+  final double z;
+  final String? letter;
+  bool collected = false;
+}
+
+/// Height the runner flies at with the jetpack / head start.
+const double flyHeight = 4.8;
 
 class PowerUp {
   PowerUp(this.kind, this.lane, this.y, this.z);

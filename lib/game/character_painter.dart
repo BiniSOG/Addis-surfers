@@ -52,6 +52,7 @@ class CharacterPainter {
     Pose pose, {
     required double phase,
     required double t,
+    bool jetpack = false,
   }) {
     if (pose == Pose.roll) {
       _roll(c, id, t);
@@ -77,7 +78,40 @@ class CharacterPainter {
       case CharacterId.yoseph:
         _yoseph(c, bob, liftL, liftR, armSwing, armsUp, phase);
     }
+    if (jetpack) _jetpack(c, t);
     c.restore();
+  }
+
+  static void _jetpack(Canvas c, double t) {
+    for (final side in [-1.0, 1.0]) {
+      final tank = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(side * 8, -60), width: 11, height: 30),
+        const Radius.circular(5),
+      );
+      c.drawRRect(tank.inflate(1.5), _fill(_outline));
+      c.drawRRect(
+        tank,
+        Paint()
+          ..shader = const LinearGradient(
+            colors: [Color(0xFFE0E0E0), Color(0xFF9E9E9E)],
+          ).createShader(tank.outerRect),
+      );
+      c.drawRect(Rect.fromLTWH(side * 8 - 5.5, -66, 11, 3), _fill(ethRed));
+      // Flickering flame.
+      final len = 16 + sin(t * 40 + side) * 4;
+      final flame = Path()
+        ..moveTo(side * 8 - 5, -45)
+        ..lineTo(side * 8 + 5, -45)
+        ..lineTo(side * 8, -45 + len)
+        ..close();
+      c.drawPath(flame, _fill(const Color(0xFFFF8A00)));
+      final inner = Path()
+        ..moveTo(side * 8 - 2.5, -45)
+        ..lineTo(side * 8 + 2.5, -45)
+        ..lineTo(side * 8, -45 + len * 0.6)
+        ..close();
+      c.drawPath(inner, _fill(ethYellow));
+    }
   }
 
   // ---------------------------------------------------------------- helpers

@@ -97,7 +97,7 @@ class WorldRenderer {
     // Light parallax with the camera, and with roof height.
     canvas.drawImage(_sky!, Offset(-_w * 0.15 - g.camX * 6, _camY * 6), _imgPaint);
     // Drifting clouds.
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < (g.lowGraphics ? 2 : 5); i++) {
       final span = _w * 1.6;
       final x = ((i * 0.37 * span + g.time * (6 + i * 2)) % span) - _w * 0.3;
       final y = _h * (0.05 + 0.045 * i);
@@ -333,6 +333,10 @@ class WorldRenderer {
       if (p.collected || p.z < _zNear || p.z > g.pz + 90) continue;
       items.add((p.z, 2, p));
     }
+    for (final p in g.pickups) {
+      if (p.collected || p.z < _zNear || p.z > g.pz + 90) continue;
+      items.add((p.z, 8, p));
+    }
     items.add((g.pz, 3, null));
 
     // Scenery is placed on fixed slots so it is stable as you run.
@@ -342,7 +346,7 @@ class WorldRenderer {
     }
     const palmGap = 6.0;
     for (var i = (_zNear / palmGap).ceil(); i * palmGap < _zFar; i++) {
-      if (_hash(i, 1) > 0.3) items.add((i * palmGap, 5, i));
+      if (_hash(i, 1) > (g.lowGraphics ? 0.75 : 0.3)) items.add((i * palmGap, 5, i));
     }
     const bGap = 12.0;
     for (var i = ((_zNear - 10) / bGap).ceil(); i * bGap < _zFar; i++) {
@@ -372,6 +376,8 @@ class WorldRenderer {
           _drawBuildings(c, ref! as int, z);
         case 7:
           _drawShelter(c, z);
+        case 8:
+          _drawPickup(c, ref! as Pickup);
       }
     }
   }
@@ -612,6 +618,8 @@ class WorldRenderer {
       PowerKind.magnet => const Color(0xFFE53935),
       PowerKind.multiplier => const Color(0xFF8E24AA),
       PowerKind.sneakers => ethGreen,
+      PowerKind.jetpack => const Color(0xFFF08A00),
+      PowerKind.shield => const Color(0xFF00897B),
     };
     c.drawCircle(
       o,
@@ -652,7 +660,108 @@ class WorldRenderer {
         c.drawPath(shoe, _fill(Colors.white));
         c.drawRect(Rect.fromLTWH(o.dx - r * 0.6, o.dy + r * 0.18, r * 1.22, r * 0.12), _fill(ethYellow));
         c.drawRect(Rect.fromLTWH(o.dx - r * 0.6, o.dy + r * 0.3, r * 1.22, r * 0.1), _fill(ethRed));
+      case PowerKind.jetpack:
+        for (final dx in [-0.25, 0.25]) {
+          c.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(center: o.translate(dx * r, -r * 0.1), width: r * 0.38, height: r * 0.8),
+              Radius.circular(r * 0.18),
+            ),
+            _fill(Colors.white),
+          );
+          c.drawPath(
+            Path()
+              ..moveTo(o.dx + dx * r - r * 0.15, o.dy + r * 0.3)
+              ..lineTo(o.dx + dx * r + r * 0.15, o.dy + r * 0.3)
+              ..lineTo(o.dx + dx * r, o.dy + r * 0.7)
+              ..close(),
+            _fill(ethYellow),
+          );
+        }
+      case PowerKind.shield:
+        _shieldGlyph(c, o, r * 0.6, Colors.white);
     }
+  }
+
+  void _shieldGlyph(Canvas c, Offset o, double r, Color col) {
+    c.drawPath(
+      Path()
+        ..moveTo(o.dx, o.dy - r)
+        ..lineTo(o.dx + r * 0.85, o.dy - r * 0.6)
+        ..quadraticBezierTo(o.dx + r * 0.8, o.dy + r * 0.5, o.dx, o.dy + r)
+        ..quadraticBezierTo(o.dx - r * 0.8, o.dy + r * 0.5, o.dx - r * 0.85, o.dy - r * 0.6)
+        ..close(),
+      _fill(col),
+    );
+  }
+
+  final _letterCache = <String, TextPainter>{};
+
+  void _drawPickup(Canvas c, Pickup p) {
+    final s = scaleAt(p.z);
+    final bob = sin(g.time * 3 + p.z) * 0.12;
+    final o = project(laneX(p.lane), p.y + bob, p.z);
+    final r = 0.4 * s;
+    if (r < 1) return;
+    if (p.kind == PickupKind.gem) {
+      // Faceted blue gem.
+      c.drawCircle(
+        o,
+        r * 1.5,
+        Paint()
+          ..color = const Color(0x665EC8FF)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.6),
+      );
+      final top = o.translate(0, -r);
+      final bottom = o.translate(0, r);
+      final l = o.translate(-r * 0.8, -r * 0.25);
+      final rr = o.translate(r * 0.8, -r * 0.25);
+      _quad(c, top, rr, bottom, l, _fill(const Color(0xFF2F80ED)));
+      _path
+        ..reset()
+        ..moveTo(top.dx, top.dy)
+        ..lineTo(rr.dx, rr.dy)
+        ..lineTo(o.dx, o.dy - r * 0.1)
+        ..close();
+      c.drawPath(_path, _fill(const Color(0xFF8FD3FF)));
+      _path
+        ..reset()
+        ..moveTo(l.dx, l.dy)
+        ..lineTo(o.dx, o.dy - r * 0.1)
+        ..lineTo(bottom.dx, bottom.dy)
+        ..close();
+      c.drawPath(_path, _fill(const Color(0xFF1C5DB8)));
+      return;
+    }
+    // Daily Word letter tile.
+    final tile = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: o, width: r * 2, height: r * 2),
+      Radius.circular(r * 0.35),
+    );
+    c.drawRRect(
+      tile.inflate(r * 0.3),
+      Paint()
+        ..color = const Color(0x66FCDD09)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.5),
+    );
+    c.drawRRect(tile.inflate(r * 0.12), _fill(Colors.white));
+    c.drawRRect(tile, _fill(ethRed));
+    final letter = p.letter ?? '?';
+    final tp = _letterCache.putIfAbsent(
+      letter,
+      () => TextPainter(
+        text: TextSpan(
+          text: letter,
+          style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: Colors.white),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(),
+    );
+    c.save();
+    c.translate(o.dx, o.dy);
+    c.scale(r * 1.5 / tp.height);
+    tp.paint(c, Offset(-tp.width / 2, -tp.height / 2));
+    c.restore();
   }
 
   // ------------------------------------------------------------- player
@@ -674,6 +783,19 @@ class WorldRenderer {
       GameState.crashed || GameState.over => Pose.crash,
       _ => g.rolling ? Pose.roll : (g.grounded ? Pose.run : Pose.jump),
     };
+    if (g.flying) {
+      // Speed streaks while flying.
+      final streak = Paint()
+        ..color = Colors.white.withValues(alpha: g.headStarting ? 0.55 : 0.3)
+        ..strokeWidth = 2;
+      for (var i = 0; i < (g.headStarting ? 14 : 6); i++) {
+        final a = i * 2.39996 + g.time * 0.3;
+        final len = (40 + (i * 37) % 60) * (g.headStarting ? 2.0 : 1.0);
+        final r0 = 0.25 * _h + ((g.time * 900 + i * 97) % (0.4 * _h));
+        final dir = Offset(cos(a), sin(a));
+        c.drawLine(Offset(_cx, _h * 0.45) + dir * r0, Offset(_cx, _h * 0.45) + dir * (r0 + len), streak);
+      }
+    }
     c.save();
     c.translate(feet.dx, feet.dy);
     // Drawn ~20% larger than the hitbox so the character reads well on phones.
@@ -682,7 +804,37 @@ class WorldRenderer {
     // Lean into lane changes.
     final lean = ((laneX(g.targetLane) - g.px) / laneWidth).clamp(-1.0, 1.0);
     c.rotate(lean * 0.12);
-    CharacterPainter.paint(c, g.character, pose, phase: g.runPhase, t: g.time);
+    CharacterPainter.paint(
+      c,
+      g.character,
+      g.flying ? Pose.jump : pose,
+      phase: g.runPhase,
+      t: g.time,
+      jetpack: g.flying,
+    );
+    if (g.shielded) {
+      final pulse = 0.85 + 0.15 * sin(g.time * 6);
+      final remaining = g.powers[PowerKind.shield] ?? 0;
+      final blink = remaining < 3 && (g.time * 8).floor().isEven;
+      if (!blink) {
+        final center = const Offset(0, -50);
+        c.drawCircle(
+          center,
+          66 * pulse,
+          Paint()..color = const Color(0x3300BFA5),
+        );
+        c.drawCircle(
+          center,
+          66 * pulse,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 4
+            ..shader = const SweepGradient(
+              colors: [ethGreen, ethYellow, ethRed, ethGreen],
+            ).createShader(Rect.fromCircle(center: center, radius: 66)),
+        );
+      }
+    }
     c.restore();
   }
 

@@ -15,6 +15,11 @@ class TrackGenerator {
   final Random _rng;
   double _nextRowZ = 40;
   double _nextPowerZ = 160;
+  double _nextGemZ = 900;
+  double _nextLetterZ = 260;
+
+  /// Daily Word letter to place next (null when the word is complete).
+  String? letter;
   final List<double> _trainEnd = [-1e9, -1e9, -1e9];
   final List<double> _laneLast = [-1e9, -1e9, -1e9];
   final List<double> _coinLast = [-1e9, -1e9, -1e9];
@@ -30,6 +35,7 @@ class TrackGenerator {
     required List<Obstacle> obstacles,
     required List<Coin> coins,
     required List<PowerUp> powerUps,
+    List<Pickup>? pickups,
   }) {
     while (_nextRowZ < targetZ) {
       final z = _nextRowZ;
@@ -37,6 +43,14 @@ class TrackGenerator {
       if (z > _nextPowerZ) {
         _placePowerUp(z, powerUps);
         _nextPowerZ = z + 280 + _rng.nextDouble() * 260;
+      } else if (pickups != null && z > _nextGemZ) {
+        if (_placePickup(z, pickups, PickupKind.gem)) {
+          _nextGemZ = z + 1300 + _rng.nextDouble() * 1200;
+        }
+      } else if (pickups != null && letter != null && z > _nextLetterZ) {
+        if (_placePickup(z, pickups, PickupKind.letter)) {
+          _nextLetterZ = z + 650 + _rng.nextDouble() * 450;
+        }
       }
       final rowTime = 1.55 - 0.6 * difficulty;
       _nextRowZ += max(16.0, speed * rowTime) + _rng.nextDouble() * 4;
@@ -228,9 +242,34 @@ class TrackGenerator {
     for (final l in _shuffledLanes()) {
       final pz = z - 8;
       if (_trainEnd[_idx(l)] > pz - 2 || !_laneClear(l, pz, 1)) continue;
-      final kind = PowerKind.values[_rng.nextInt(PowerKind.values.length)];
+      final kind = trackPowerKinds[_rng.nextInt(trackPowerKinds.length)];
       powerUps.add(PowerUp(kind, l, 0.9, pz));
       return;
+    }
+  }
+
+  bool _placePickup(double z, List<Pickup> pickups, PickupKind kind) {
+    for (final l in _shuffledLanes()) {
+      final pz = z - 8;
+      if (_trainEnd[_idx(l)] > pz - 2 || !_laneClear(l, pz, 1)) continue;
+      pickups.add(Pickup(kind, l, 0.9, pz, letter: kind == PickupKind.letter ? letter : null));
+      return true;
+    }
+    return false;
+  }
+
+  /// A weaving trail of coins in the sky for the jetpack.
+  void addSkyCoins(double fromZ, double toZ, List<Coin> coins) {
+    var lane = _rng.nextInt(3) - 1;
+    var z = fromZ;
+    while (z < toZ) {
+      final n = 6 + _rng.nextInt(6);
+      for (var i = 0; i < n && z < toZ; i++) {
+        coins.add(Coin(laneX(lane), flyHeight + 0.6, z));
+        z += 1.8;
+      }
+      lane = (lane + (_rng.nextBool() ? 1 : -1)).clamp(-1, 1);
+      z += 3;
     }
   }
 }

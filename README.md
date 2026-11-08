@@ -10,21 +10,49 @@ run up ramps onto the train roofs, and collect birr coins and power-ups.
 
 ## Features
 
+**Gameplay**
 - Pseudo-3D track drawn with a perspective camera (no heavy 3D engine), so it
   runs smoothly on low-end Android phones.
-- 3 playable characters based on the key art, animated from behind. Their
-  portraits from the art appear on the Crew screen. Tadesse and Yoseph are
-  unlocked with coins.
-- Trains in orange, white and the Ethiopian flag colours, with "ADDIS / አዲስ አበባ /
-  ETHIOPIA" graffiti livery, plus ramps and oncoming trains.
-- Power-ups: **Magnet**, **x2 Score**, **Super Jump** (high enough to jump onto
-  train roofs).
-- Difficulty and speed rise over time. The track generator always leaves at
-  least one lane free of trains, and a unit test checks this.
-- Swipe controls (arrow keys / WASD also work when debugging).
-- Coins, best score, unlocked characters and the selected character are saved
-  on the device.
-- Bundled Noto Sans Ethiopic font, so Amharic looks the same on every device.
+- 3 playable characters based on the key art (Meaza, Tadesse, Yoseph).
+- Trains in orange, white and the Ethiopian flag colours, plus ramps onto the
+  roofs, oncoming trains and barriers to jump or roll under.
+- Power-ups on the track: **Coin Magnet**, **x2 Score**, **Super Jump** and
+  **Jetpack** (fly over everything along a trail of coins in the sky).
+- **Boosts** from the shop: **Gasha Shield** (absorbs one crash; tap the button
+  or double-tap the screen) and **Head Start** (a jetpack dash at the start of a
+  run).
+- **Gems** (rare on the track) revive you after a crash. Each revive in a run
+  costs double: 1, 2, 4... A rewarded ad also revives you, once per run.
+- Pause screen with your missions and a 3-2-1 countdown when you resume.
+
+**Progression**
+- **Missions**: 3 at a time. Finishing a set raises your permanent **score
+  multiplier** (up to x30) and gives you a gem. You can skip a mission for 3
+  gems.
+- **Daily Word**: letter tiles appear on the track. Spell today's Addis word
+  (BUNNA, INJERA, MESKEL, MERKATO...) for 1500 coins + 2 gems.
+- **Daily rewards**: a 7-day streak calendar (coins, shields, head starts, gems).
+
+**Marketplace (Shop)**
+- Upgrades: 5 levels for each power-up, so they last longer.
+- Boosts: shields and head starts.
+- Bank: trade gems for coins, or watch a short video for free coins.
+- Crew: unlock and select characters.
+
+**Settings**
+- Music and sound effect volume, vibration, battery-saver graphics,
+  show the tutorial again, ad privacy choices, reset progress.
+
+**Ethiopian soundtrack**
+- "Tezeta" (menu) uses the Tezeta minor *qenet*: slow krar arpeggios and a
+  washint flute melody.
+- "Merkato Run" (gameplay) uses the Ambassel *qenet*: a 6/8 eskista groove on
+  kebero drums, a krar ostinato and masenqo (fiddle) and washint melodies, with
+  hand claps.
+- All music and sound effects are original and synthesised by
+  `tools/generate_audio.py`, so you own them outright. To regenerate them:
+  `pip install numpy scipy`, then `python3 tools/generate_audio.py` (needs
+  ffmpeg).
 
 ## Ad strategy (AdMob)
 
@@ -102,6 +130,9 @@ lib/
   main.dart                 app entry (portrait, immersive, ads init)
   characters.dart           Meaza / Tadesse / Yoseph data & prices
   progress.dart             saved coins, best score, unlocks
+  settings.dart             player settings (volume, vibration, graphics)
+  audio/audio_manager.dart  music + sound effects
+  meta/                     economy, missions, daily rewards & daily word
   ads/
     ad_config.dart          ad unit ids + placement rules
     ad_manager.dart         UMP consent, interstitial & rewarded logic
@@ -116,14 +147,19 @@ lib/
   ui/
     game_screen.dart        menu, HUD, pause, continue, game over
     character_select.dart   Crew screen
+    shop_screen.dart        marketplace
+    missions_screen.dart    missions + daily word
+    settings_screen.dart    settings
+    daily_reward_dialog.dart 7-day rewards
     widgets.dart            logo, buttons, badges
 assets/images/              character portraits from the key art
 assets/fonts/               Noto Sans Ethiopic (SIL OFL 1.1)
+assets/audio/               generated music & sound effects
+tools/generate_audio.py     soundtrack synthesiser
 ```
 
 ## Ideas for the next updates
 
-- Sound effects and music (add `flame_audio`).
 - A "Remove ads" in-app purchase (`in_app_purchase`), and coin packs.
 - Daily missions and login rewards, which help retention.
 - Firebase Analytics + Crashlytics, and Remote Config so you can tune ad
