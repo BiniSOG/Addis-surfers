@@ -1,0 +1,61 @@
+name: Build iOS (unsigned IPA)
+
+# Builds an UNSIGNED .ipa for sideloading with Sideloadly / AltStore (they
+# sign it with the user's own Apple ID during install). For TestFlight/App
+# Store a signed build with an Apple Developer account is needed instead.
+# Runs on demand only, because macOS runners use more CI minutes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build iOS app (no code signing)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry addis-surfers-unsigned.ipa Payload
+          ls -la addis-surfers-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        timeout-minutes: 10
+        continue-on-error: true
+        with:
+          name: addis-surfers-ipa
+          path: addis-surfers-unsigned.ipa
+
+      - name: Publish to the "ios-latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-latest
+          name: Addis Surfers - latest iPhone build (sideload)
+          prerelease: true
+          make_latest: false
+          target_commitish: ${{ github.sha }}
+          body: |
+            Unsigned iPhone build from `${{ github.ref_name }}` (${{ github.sha }}).
+
+            Install it with **Sideloadly** (sideloadly.io) or **AltStore** (altstore.io)
+            using your own Apple ID; they sign it for your phone during install.
+            With a free Apple ID the app must be re-installed/refreshed every 7 days.
+            On the iPhone: Settings > General > VPN & Device Management > trust your
+            Apple ID, and turn on Settings > Privacy & Security > Developer Mode.
+          files: addis-surfers-unsigned.ipa
